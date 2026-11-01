@@ -55,26 +55,49 @@ public sealed class DmxEngine : IDisposable
     /// <summary>Renders and sends one frame. The timer calls this; tests call it directly.</summary>
     public void Tick()
     {
-        var frame = _console.Render();
+        DmxFrame frame;
+        try
+        {
+            frame = _console.Render();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // A rendering bug must not end the output loop: keep the last frame going and report the problem.
+            Volatile.Write(ref _lastError, $"Rendering failed: {ex.Message}");
+            return;
+        }
+
         Volatile.Write(ref _lastFrame, frame);
 
         var output = Output;
         if (output is null)
             return;
 
-        try
+        string? error = null;
+        foreach (var (universe, data) in frame.Universes)
         {
-            foreach (var (universe, data) in frame.Universes)
-                output.Send(universe, data);
+            var route = frame.RouteOf(universe);
+            if (!route.Enabled)
+                continue;
 
+            // One universe that cannot be sent (an unreachable node, say) must not keep back the others.
+            try
+            {
+                if (output is IRoutedDmxOutput routed)
+                    routed.Send(universe, data, route.Unicast);
+                else
+                    output.Send(universe, data);
+            }
+            catch (Exception ex)
+            {
+                // A cable pulled or an adapter switched off must not stop the engine; keep trying every tick.
+                error ??= $"Universe {universe}: {ex.Message}";
+            }
+        }
+
+        if (error is null)
             Interlocked.Increment(ref _framesSent);
-            Volatile.Write(ref _lastError, null);
-        }
-        catch (Exception ex)
-        {
-            // A cable pulled or an adapter switched off must not stop the engine; keep trying every tick.
-            Volatile.Write(ref _lastError, ex.Message);
-        }
+        Volatile.Write(ref _lastError, error);
     }
 
     public void Dispose() => Stop();

@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text;
 
-namespace NxDmx.App;
+namespace NxDmx.App.Services;
 
 /// <summary>
 /// Where the app keeps its files. The autosave holds the current show after every change, so a crash, a power cut or an
@@ -9,12 +9,19 @@ namespace NxDmx.App;
 /// </summary>
 internal static class ShowStorage
 {
+    /// <summary>Another place for the app data (autosave, settings), for tests and portable use: set NXDMX_DATA.</summary>
+    public const string DataOverrideVariable = "NXDMX_DATA";
+
     private static readonly string Folder =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NX-DMX");
+        Environment.GetEnvironmentVariable(DataOverrideVariable) is { Length: > 0 } custom
+            ? custom
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NX-DMX");
 
     private static string AutosavePath => Path.Combine(Folder, "autosave.nxshow");
 
     private static string SessionPath => Path.Combine(Folder, "session.txt");
+
+    public static string SettingsPath => Path.Combine(Folder, "settings.json");
 
     /// <summary>Default folder of the open and save dialogs.</summary>
     public static string ShowsFolder =>

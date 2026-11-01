@@ -1,3 +1,4 @@
+using NxDmx.Core.Dmx;
 using NxDmx.Core.Fixtures;
 using NxDmx.Core.Playback;
 using NxDmx.Core.Programming;
@@ -5,8 +6,8 @@ using NxDmx.Core.Programming;
 namespace NxDmx.Core.Commands;
 
 /// <summary>
-/// A deep copy of everything an operator can edit: patch, groups, cuelists and the programmer. Backs Oops
-/// and rolls back commands that fail half-way. Restoring keeps the live playback position of cuelists,
+/// A deep copy of everything an operator can edit: universes, profiles, patch, groups, cuelists and the programmer.
+/// Backs Oops and rolls back commands that fail half-way. Restoring keeps the live playback position of cuelists,
 /// because Go, Back and Off are not programming steps.
 /// </summary>
 internal sealed class ShowSnapshot
@@ -19,6 +20,8 @@ internal sealed class ShowSnapshot
 
     private sealed record CuelistData(int Number, string Label, List<CueData> Cues, decimal? Current);
 
+    private readonly List<UniverseConfig> _universes;
+    private readonly List<FixtureType> _customTypes;
     private readonly List<FixtureData> _fixtures;
     private readonly List<GroupData> _groups;
     private readonly List<CuelistData> _cuelists;
@@ -27,6 +30,8 @@ internal sealed class ShowSnapshot
 
     private ShowSnapshot(Show show, Programmer programmer)
     {
+        _universes = show.Universes.Values.Select(u => u.Clone()).ToList();
+        _customTypes = [.. show.CustomTypes.Values];
         _fixtures = show.Patch.Fixtures
             .Select(f => new FixtureData(f.Id, f.Type, f.Universe, f.Address, f.Label))
             .ToList();
@@ -49,6 +54,14 @@ internal sealed class ShowSnapshot
     public void Restore(Show show, Programmer programmer)
     {
         var livePositions = show.Cuelists.ToDictionary(pair => pair.Key, pair => pair.Value.CurrentNumber);
+
+        show.Universes.Clear();
+        foreach (var u in _universes)
+            show.Universes[u.Number] = u.Clone();
+
+        show.CustomTypes.Clear();
+        foreach (var type in _customTypes)
+            show.CustomTypes[type.Name] = type;
 
         show.Patch.Clear();
         foreach (var f in _fixtures)

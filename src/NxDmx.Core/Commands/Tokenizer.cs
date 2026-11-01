@@ -86,6 +86,14 @@ internal static class Tokenizer
                     }
                 }
 
+                // 10.0.0.5: further dotted groups make it one token, which is how an IP address is typed.
+                while (!line[start..i].Contains(',') && i + 1 < line.Length && line[i] == '.' && char.IsAsciiDigit(line[i + 1]))
+                {
+                    i++;
+                    while (i < line.Length && char.IsAsciiDigit(line[i]))
+                        i++;
+                }
+
                 tokens.Add(new Token(TokenKind.Number, line[start..i].Replace(',', '.')));
             }
             else if (char.IsLetter(c))

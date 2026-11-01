@@ -16,11 +16,17 @@ public sealed class Fixture
 
     public string Label { get; set; }
 
-    public FixtureType Type { get; }
+    public FixtureType Type { get; set; }
 
     /// <summary>1-based, as shown to the operator.</summary>
-    public int Universe { get; }
+    public int Universe { get; set; }
 
     /// <summary>First DMX channel, 1..512.</summary>
-    public int Address { get; }
+    public int Address { get; set; }
+
+    /// <summary>Last DMX channel the fixture occupies.</summary>
+    public int EndAddress => Address + Type.Footprint - 1;
+
+    public bool Overlaps(Fixture other) =>
+        other != this && other.Universe == Universe && other.Address <= EndAddress && Address <= other.EndAddress;
 }

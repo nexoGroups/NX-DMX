@@ -49,6 +49,13 @@ try {
         try { while ($true) { [void]$listener.Receive([ref]$ep) } } catch { }
     })
 
+    # Versions from 0.3.0 on read their settings from NXDMX_DATA: Art-Net to loopback, no remote servers. Older ones ignore it
+    # and get the target typed in below.
+    $dataDir = Join-Path ([IO.Path]::GetTempPath()) ('nxdmx-update-data-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    New-Item -ItemType Directory -Force $dataDir | Out-Null
+    '{ "BroadcastAddress": "127.0.0.1", "HttpEnabled": false, "OscEnabled": false, "TextEnabled": false }' | Set-Content -Encoding UTF8 (Join-Path $dataDir 'settings.json')
+    $env:NXDMX_DATA = $dataDir
+
     if ($Feed) { $env:NXDMX_UPDATE_SOURCE = $Feed } else { Remove-Item Env:NXDMX_UPDATE_SOURCE -ErrorAction SilentlyContinue }
     $proc = Start-Process -FilePath (Join-Path $installDir 'current\NX-DMX.exe') -PassThru
     for ($i = 0; $i -lt 120 -and $proc.MainWindowHandle -eq [IntPtr]::Zero; $i++) { Start-Sleep -Milliseconds 250; $proc.Refresh() }
@@ -57,9 +64,13 @@ try {
     "window title   : " + $root.Current.Name
 
     function Find-Id($id) { $root.FindFirst('Descendants', (Prop $AE::AutomationIdProperty $id)) }
-    (Find-Id 'TargetIp').GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('127.0.0.1')
-    $apply = $root.FindFirst('Descendants', (New-Object System.Windows.Automation.AndCondition((Prop $AE::NameProperty 'Apply'), (Prop $AE::ControlTypeProperty ([System.Windows.Automation.ControlType]::Button)))))
-    $apply.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    # Before 0.3.0 the Art-Net target was a field in the main window.
+    $target = Find-Id 'TargetIp'
+    if ($target) {
+        $target.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('127.0.0.1')
+        $apply = $root.FindFirst('Descendants', (New-Object System.Windows.Automation.AndCondition((Prop $AE::NameProperty 'Apply'), (Prop $AE::ControlTypeProperty ([System.Windows.Automation.ControlType]::Button)))))
+        $apply.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    }
 
     $button = $null
     for ($i = 0; $i -lt 120 -and -not $button; $i++) { $button = Find-Id 'UpdateButton'; if (-not $button) { Start-Sleep -Milliseconds 500 } }
@@ -118,6 +129,8 @@ finally {
     }
     if (Test-Path $installDir) { Remove-Item -Recurse -Force $installDir -ErrorAction SilentlyContinue }
     if (-not $hadAppData) { Remove-Item -Recurse -Force $appData -ErrorAction SilentlyContinue }
+    if ($dataDir) { Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue }
+    Remove-Item Env:NXDMX_DATA -ErrorAction SilentlyContinue
 }
 
 if ($ok) { "RESULT: PASS (update to $ExpectVersion installed)"; exit 0 }

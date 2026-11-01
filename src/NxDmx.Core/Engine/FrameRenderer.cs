@@ -1,10 +1,11 @@
+using System.Net;
 using NxDmx.Core.Dmx;
 using NxDmx.Core.Fixtures;
 using NxDmx.Core.Programming;
 
 namespace NxDmx.Core.Engine;
 
-/// <summary>Turns the show state into DMX: playbacks first, then the programmer on top.</summary>
+/// <summary>Turns the show state into DMX: playbacks first, then the programmer on top, then the output controls.</summary>
 public static class FrameRenderer
 {
     /// <summary>
@@ -41,21 +42,31 @@ public static class FrameRenderer
         return fixture.Type.Channels.FirstOrDefault(c => c.Attribute == attribute)?.Default ?? 0;
     }
 
-    public static DmxFrame Render(Show show, Programmer programmer)
+    public static DmxFrame Render(Show show, Programmer programmer, OutputState? output = null)
     {
         var resolved = ResolveValues(show, programmer);
+        var factor = output?.IntensityFactor ?? 1;
         var frame = new DmxFrame();
+
+        // Defined universes are always part of the frame, even without fixtures: a node expects to keep receiving data.
+        foreach (var universe in show.Universes.Values)
+        {
+            frame.GetOrAdd(universe.Number);
+            frame.SetRoute(universe.Number, RouteOf(universe));
+        }
 
         foreach (var fixture in show.Patch.Fixtures)
         {
             var data = frame.GetOrAdd(fixture.Universe);
-            var dimmer = fixture.Type.HasVirtualDimmer ? ValueOf(fixture, FixtureAttribute.Dimmer, resolved) : 1;
+            var dimmer = fixture.Type.HasVirtualDimmer ? ValueOf(fixture, FixtureAttribute.Dimmer, resolved) * factor : 1;
 
             foreach (var channel in fixture.Type.Channels)
             {
                 var value = ValueOf(fixture, channel.Attribute, resolved);
                 if (channel.Attribute.IsColor())
                     value *= dimmer;
+                else if (channel.Attribute == FixtureAttribute.Dimmer)
+                    value *= factor;
 
                 Write(data, fixture.Address, channel, Math.Clamp(value, 0, 1));
             }
@@ -64,17 +75,35 @@ public static class FrameRenderer
         return frame;
     }
 
+    private static UniverseRoute RouteOf(UniverseConfig universe)
+    {
+        IPAddress? unicast = null;
+        var usable = true;
+        if (universe.Destination == UniverseDestination.Unicast)
+        {
+            // A unicast universe without a valid address would silently go to the wrong place; it sends nothing instead.
+            usable = UniverseConfig.TryParseAddress(universe.UnicastAddress, out var address);
+            unicast = usable ? address : null;
+        }
+
+        return new UniverseRoute(universe.Enabled && usable, unicast);
+    }
+
     private static void Write(byte[] data, int address, ChannelDefinition channel, double value)
     {
         var coarse = address - 1 + channel.Offset - 1;
 
         if (channel.FineOffset is { } fineOffset)
         {
+            var fine = address - 1 + fineOffset - 1;
+            if (coarse >= data.Length || fine >= data.Length)
+                return;
+
             var sixteenBit = (int)Math.Round(value * 65535, MidpointRounding.AwayFromZero);
             data[coarse] = (byte)(sixteenBit >> 8);
-            data[address - 1 + fineOffset - 1] = (byte)(sixteenBit & 0xFF);
+            data[fine] = (byte)(sixteenBit & 0xFF);
         }
-        else
+        else if (coarse < data.Length)
         {
             data[coarse] = (byte)Math.Round(value * 255, MidpointRounding.AwayFromZero);
         }

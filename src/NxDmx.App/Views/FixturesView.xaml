@@ -1,0 +1,135 @@
+<views:ConsoleView x:Class="NxDmx.App.Views.FixturesView"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:views="clr-namespace:NxDmx.App.Views">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="360"/>
+            <ColumnDefinition Width="5"/>
+            <ColumnDefinition Width="400" MinWidth="320"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Fixture tiles -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border Style="{StaticResource PanelBorder}" BorderThickness="0,0,0,1" Padding="10,6">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" Text="GROUPS" Style="{StaticResource Caption}" Margin="0,0,10,0"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Focusable="False">
+                        <StackPanel x:Name="GroupStrip" Orientation="Horizontal"/>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False" Padding="6">
+                <Grid>
+                    <ItemsControl x:Name="Tiles" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Width="112" Height="84" Margin="3" Cursor="Hand" Tag="{Binding Id}" Focusable="False"
+                                        Click="Tile_Click"
+                                        ToolTip="{Binding ToolTip}" AutomationProperties.AutomationId="{Binding AutomationId}">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Background" Value="{StaticResource Surface2Brush}"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                                                BorderThickness="{TemplateBinding BorderThickness}">
+                                                            <ContentPresenter/>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Selected}" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource AmberDimBrush}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource AmberBrush}"/>
+                                                    <Setter Property="BorderThickness" Value="2"/>
+                                                </DataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding Selected}" Value="False"/>
+                                                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}"/>
+                                                    <Setter Property="Background" Value="{StaticResource Surface3Brush}"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                    <Grid Margin="7,5,7,6">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <DockPanel>
+                                            <Ellipse DockPanel.Dock="Right" Width="7" Height="7" Fill="{StaticResource RedBrush}" VerticalAlignment="Center"
+                                                     Visibility="{Binding ProgrammedVisibility}" ToolTip="Values set in the programmer"/>
+                                            <TextBlock Text="{Binding Id}" FontFamily="Consolas" FontSize="19" FontWeight="Bold" Foreground="White"/>
+                                        </DockPanel>
+                                        <TextBlock Grid.Row="1" Text="{Binding Label}" FontSize="10.5" Foreground="{StaticResource DimBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <Border Grid.Row="2" Height="8" VerticalAlignment="Center" Background="{Binding Brush}" Margin="0,4"/>
+                                        <DockPanel Grid.Row="3">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Patch}" FontFamily="Consolas" FontSize="10.5"
+                                                       Foreground="{StaticResource MutedBrush}" VerticalAlignment="Bottom"/>
+                                            <TextBlock Text="{Binding Level}" FontFamily="Consolas" FontSize="11.5" Foreground="{StaticResource TextBrush}"/>
+                                        </DockPanel>
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="EmptyHint" Visibility="Collapsed" Foreground="{StaticResource MutedBrush}" Margin="16,14" TextWrapping="Wrap"
+                               Text="No fixtures are patched yet. Open the Patch view to add fixtures to a universe."/>
+                </Grid>
+            </ScrollViewer>
+
+            <Border Grid.Row="2" Style="{StaticResource PanelBorder}" BorderThickness="0,1,0,0" Padding="8,6">
+                <WrapPanel x:Name="SelectBar">
+                    <Button Content="All" Click="SelectAll_Click" Margin="0,0,4,0" ToolTip="Select every patched fixture"/>
+                    <Button Content="Odd" Click="SelectOdd_Click" Margin="0,0,4,0"/>
+                    <Button Content="Even" Click="SelectEven_Click" Margin="0,0,4,0"/>
+                    <Button Content="Invert" Click="Invert_Click" Margin="0,0,4,0"/>
+                    <Button Content="◀ Prev" Click="Prev_Click" Margin="10,0,4,0" ToolTip="Select the previous fixture"/>
+                    <Button Content="Next ▶" Click="Next_Click" Margin="0,0,4,0" ToolTip="Select the next fixture"/>
+                    <Button Content="Deselect" Click="Deselect_Click" Margin="10,0,4,0" ToolTip="Clear (first press: selection)"/>
+                    <Button Content="Clear programmer" Style="{StaticResource RedButton}" Click="ClearAll_Click" ToolTip="ClearAll: selection and programmer"/>
+                </WrapPanel>
+            </Border>
+        </Grid>
+
+        <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Focusable="False"/>
+
+        <!-- Attribute panel -->
+        <Border Grid.Column="2" Style="{StaticResource PanelBorder}" BorderThickness="0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="12,10,12,6">
+                    <TextBlock Text="SELECTION" Style="{StaticResource Caption}"/>
+                    <TextBlock x:Name="SelectionTitle" FontFamily="Consolas" FontSize="15" Foreground="{StaticResource AmberBrush}" Margin="0,2,0,8"
+                               TextTrimming="CharacterEllipsis"/>
+                    <WrapPanel x:Name="GroupTabs"/>
+                </StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False" Padding="12,4,12,12">
+                    <StackPanel x:Name="AttributeBody"/>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+</views:ConsoleView>

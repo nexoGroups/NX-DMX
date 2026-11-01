@@ -2,7 +2,7 @@ using System.Reflection;
 using Velopack;
 using Velopack.Sources;
 
-namespace NxDmx.App;
+namespace NxDmx.App.Services;
 
 /// <summary>
 /// Finds, downloads and installs new releases from GitHub through Velopack. Updating only works in a copy that was

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using NxDmx.Core.ArtNet;
+using NxDmx.Core.Dmx;
 using NxDmx.Core.Fixtures;
 using NxDmx.Core.Playback;
 using NxDmx.Core.Programming;
@@ -19,7 +20,7 @@ public static class ShowFile
     public const string Extension = ".nxshow";
 
     private const string FormatName = "nx-dmx-show";
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2;
 
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
@@ -29,9 +30,20 @@ public static class ShowFile
     {
         public string Format { get; set; } = FormatName;
         public int Version { get; set; } = CurrentVersion;
+        public List<UniverseData> Universes { get; set; } = [];
+        public List<ProfileFile.ProfileData> Profiles { get; set; } = [];
         public List<FixtureData> Fixtures { get; set; } = [];
         public List<GroupData> Groups { get; set; } = [];
         public List<CuelistData> Cuelists { get; set; } = [];
+    }
+
+    private sealed class UniverseData
+    {
+        public int Number { get; set; }
+        public string Label { get; set; } = "";
+        public bool Enabled { get; set; } = true;
+        public string Destination { get; set; } = nameof(UniverseDestination.Broadcast);
+        public string UnicastAddress { get; set; } = "";
     }
 
     private sealed class FixtureData
@@ -77,6 +89,25 @@ public static class ShowFile
     {
         var data = new FileData
         {
+            // Every universe a fixture is patched in is part of the show, even when nobody configured it yet.
+            Universes = show.Universes.Values
+                .Concat(show.Patch.Fixtures.Select(f => f.Universe).Distinct()
+                    .Where(number => !show.Universes.ContainsKey(number))
+                    .Select(number => new UniverseConfig(number)))
+                .OrderBy(u => u.Number)
+                .Select(u => new UniverseData
+                {
+                    Number = u.Number,
+                    Label = u.Label,
+                    Enabled = u.Enabled,
+                    Destination = u.Destination.ToString(),
+                    UnicastAddress = u.UnicastAddress,
+                })
+                .ToList(),
+            Profiles = show.CustomTypes.Values
+                .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(ProfileFile.ToData)
+                .ToList(),
             Fixtures = show.Patch.Fixtures
                 .Select(f => new FixtureData { Id = f.Id, Label = f.Label, Type = f.Type.Name, Universe = f.Universe, Address = f.Address })
                 .ToList(),
@@ -130,9 +161,34 @@ public static class ShowFile
 
         var show = new Show();
 
+        foreach (var p in data.Profiles)
+        {
+            var profile = ProfileFile.FromData(p);
+            if (FixtureTypeLibrary.Find(profile.Name) is not null || !show.CustomTypes.TryAdd(profile.Name, profile))
+                throw new ShowFileException($"The profile \"{profile.Name}\" appears twice or has the name of a built-in profile.");
+        }
+
+        foreach (var u in data.Universes)
+        {
+            if (u.Number < 1 || u.Number > ArtNetPacket.MaxUniverse || show.Universes.ContainsKey(u.Number))
+                throw new ShowFileException($"Universe number {u.Number} is invalid or appears twice.");
+            if (!Enum.TryParse<UniverseDestination>(u.Destination, out var destination) || !Enum.IsDefined(destination))
+                throw new ShowFileException($"Universe {u.Number} has the unknown destination '{u.Destination}'.");
+            if (destination == UniverseDestination.Unicast && !UniverseConfig.TryParseAddress(u.UnicastAddress, out _))
+                throw new ShowFileException($"Universe {u.Number} has the invalid node address '{u.UnicastAddress}'.");
+
+            show.Universes[u.Number] = new UniverseConfig(u.Number)
+            {
+                Label = u.Label,
+                Enabled = u.Enabled,
+                Destination = destination,
+                UnicastAddress = u.UnicastAddress,
+            };
+        }
+
         foreach (var f in data.Fixtures)
         {
-            var type = FixtureTypeLibrary.Find(f.Type)
+            var type = show.FindType(f.Type)
                 ?? throw new ShowFileException($"Fixture {f.Id} has the unknown type '{f.Type}'.");
             if (f.Id < 1)
                 throw new ShowFileException($"Fixture number {f.Id} is not valid.");
@@ -143,6 +199,7 @@ public static class ShowFile
                 throw new ShowFileException($"Fixture {f.Id} has an invalid address {f.Universe}.{f.Address}.");
 
             show.Patch.Add(new Fixture(f.Id, type, f.Universe, f.Address, f.Label));
+            show.EnsureUniverse(f.Universe);
         }
 
         foreach (var g in data.Groups)

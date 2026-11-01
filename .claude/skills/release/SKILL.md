@@ -44,10 +44,9 @@ use it. The tag is `v` + version, the version number has no leading `v`.
    - Anything that mentions a version number or a limitation that changed (for example the update section).
    Re-read the whole README against the code. Do not leave a claim in that you did not check.
 4. **Screenshots** (only if the UI changed): `tools/screenshots.ps1 -Exe src\NxDmx.App\bin\Debug\net10.0-windows\NX-DMX.exe`
-   after `dotnet build NxDmx.slnx`. Delete `%AppData%\NX-DMX` before and after, otherwise the autosave of an earlier run
-   leaks into the pictures and into the user's real session. Look at `docs/images/overview.png` and `keypad.png` afterwards.
-   `update.png` shows the update button; regenerate it only if that part of the UI changed (see step 6 for how the
-   update flow is driven).
+   after `dotnet build NxDmx.slnx`. The script runs the app with its own data folder (`NXDMX_DATA`), so the user's real
+   autosave and settings are not touched. It writes `overview.png`, `patch.png`, `profiles.png`, `universes.png` and
+   `remote.png` to `docs/images`; look at them afterwards. The app window comes to the front while it runs.
 5. If the Velopack package version in the csproj changed, change `VPK_VERSION` in `release.yml`, the version in
    `tools/pack.ps1`'s comment and the README to match. The `vpk` tool and the NuGet package must have the same version.
 

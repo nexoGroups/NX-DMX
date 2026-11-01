@@ -1,372 +1,141 @@
-﻿using System.Collections.ObjectModel;
-using System.IO;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
-using NxDmx.Core;
-using NxDmx.Core.ArtNet;
-using NxDmx.Core.Engine;
-using NxDmx.Core.Storage;
-using Microsoft.Win32;
+using NxDmx.App.Services;
+using NxDmx.App.Views;
 using Velopack;
 
 namespace NxDmx.App;
 
 public partial class MainWindow : Window
 {
-    private const int MaxLogEntries = 500;
-
-    private readonly LightingConsole _console = new();
-    private readonly DmxEngine _engine;
-    private readonly ObservableCollection<LogEntry> _log = [];
-    private readonly List<string> _history = [];
-    private readonly DispatcherTimer _statusTimer;
-    private readonly UpdateService _updates = new();
-
-    private string? _showPath;
-    private string _savedJson = "";
-    private string _autosavedJson = "";
-    private string? _autosavedPath;
+    private readonly ConsoleHost _host;
+    private readonly Dictionary<string, ConsoleView> _views = new();
+    private readonly DispatcherTimer _tick;
+    private string _currentView = "";
     private UpdateInfo? _availableUpdate;
     private bool _updateBusy;
-    private ArtNetOutput? _artNet;
-    private string? _setupError;
-    private int _historyIndex;
-    private int _cuelistNumber = 1;
-    private int _monitorUniverse = 1;
-    private long _lastFrameCount;
-    private DateTime _lastFrameTime = DateTime.UtcNow;
-    private double _frameRate;
+
+    private static readonly (string Key, string Title)[] Views =
+    [
+        ("Fixtures", "Fixtures"),
+        ("Groups", "Groups"),
+        ("Cuelists", "Cuelists"),
+        ("Patch", "Patch"),
+        ("Profiles", "Fixture Manager"),
+        ("Universes", "Universes"),
+        ("Output", "Output"),
+        ("Remote", "Remote Control"),
+        ("Show", "Show"),
+    ];
 
     public MainWindow()
     {
         InitializeComponent();
 
-        _engine = new DmxEngine(_console);
-        LogList.ItemsSource = _log;
+        _host = new ConsoleHost(Dispatcher);
+        Info.Attach(_host);
+        CommandBar.Attach(_host, _host.Settings.KeypadVisible);
+        CommandBar.KeypadToggled += SetKeypadVisible;
+        Pad.Attach(_host);
+        SetKeypadVisible(_host.Settings.KeypadVisible);
 
-        var startupMessage = LoadStartupShow();
-        _console.Changed += OnConsoleChanged;
+        MasterBar.Committed += percent => _host.Run($"Master At {percent}");
+        _host.StateChanged += OnStateChanged;
+        _host.ShellChanged += UpdateHeader;
 
-        ApplyArtNet();
-        _engine.Start();
+        VersionButton.Content = "v" + _host.Updates.CurrentVersion;
 
-        _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
-        _statusTimer.Tick += (_, _) => UpdateStatus();
-        _statusTimer.Start();
+        _tick = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(120) };
+        _tick.Tick += (_, _) => _views.GetValueOrDefault(_currentView)?.Tick();
+        _tick.Start();
 
-        VersionButton.Content = "v" + _updates.CurrentVersion;
-        Title = "NX-DMX " + _updates.CurrentVersion;
+        _host.AddLog("NX-DMX ready. Click fixtures and values, or type commands: Fixture 1 Thru 4 At 50 Please. Help lists everything.");
+        if (_host.StartupNote is not null)
+            _host.AddLog(_host.StartupNote);
+        if (_host.OutputSetupError is not null)
+            _host.AddLog(_host.OutputSetupError, error: true);
 
-        RefreshViews();
-        UpdateShowState();
-        AddLog("NX-DMX ready. Select with Fixture 1 Thru 4, set with At 50, finish with Please. Help lists everything.");
-        if (startupMessage is not null)
-            AddLog(startupMessage);
+        UpdateHeader();
+        OnStateChanged();
     }
 
-    /// <summary>
-    /// Brings back the autosaved show of the last session. On the very first start there is none, so a small demo rig
-    /// is patched, through the normal commands, so there is something to drive. Returns a note for the log.
-    /// </summary>
-    private string? LoadStartupShow()
+    // ---- window ----------------------------------------------------------------------------------------------
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    /// <summary>Black title bar on Windows 10/11, so the window has no light strip on top of the dark interface.</summary>
+    private void Window_SourceInitialized(object? sender, EventArgs e)
     {
-        string? note = null;
-        if (ShowStorage.ReadAutosave() is { } autosave)
-        {
-            try
-            {
-                _console.ImportShow(autosave);
-                _showPath = ShowStorage.ReadSessionPath();
-                _autosavedJson = _console.ExportShow();
-                _savedJson = BaselineOf(_showPath);
-                return "Restored your show from the last session.";
-            }
-            catch (ShowFileException ex)
-            {
-                note = $"The autosaved show could not be restored ({ex.Message}) and was ignored.";
-            }
-        }
-
-        _console.Execute("Patch Fixture 1 Thru 8 Type RGBDim At 1.1");
-        _console.Execute("Patch Fixture 9 Thru 12 Type Mover At 1.33");
-        _console.Execute("Patch Fixture 21 Thru 24 Type Dimmer At 1.65");
-        _console.ClearHistory();
-        _savedJson = _console.ExportShow();
-        return note;
+        var handle = new WindowInteropHelper(this).Handle;
+        var dark = 1;
+        var black = 0x000000;
+        var text = 0xDADADA;
+        _ = DwmSetWindowAttribute(handle, 20, ref dark, sizeof(int));
+        _ = DwmSetWindowAttribute(handle, 35, ref black, sizeof(int));
+        _ = DwmSetWindowAttribute(handle, 36, ref text, sizeof(int));
     }
-
-    /// <summary>The text a show file would have after loading, for telling unsaved changes from saved ones.</summary>
-    private static string BaselineOf(string? path)
-    {
-        if (path is null || !File.Exists(path))
-            return "";
-
-        try
-        {
-            return ShowFile.Serialize(ShowFile.Deserialize(ShowStorage.Read(path)));
-        }
-        catch (Exception ex) when (ex is ShowFileException or IOException or UnauthorizedAccessException)
-        {
-            return "";
-        }
-    }
-
-    private void OnConsoleChanged()
-    {
-        RefreshViews();
-        UpdateShowState();
-    }
-
-    // ---- command line ----------------------------------------------------------------------------------------
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        CommandLine.Focus();
+        var start = Views.Any(v => v.Key == _host.Settings.LastView) ? _host.Settings.LastView : "Fixtures";
+        Select(start);
+        CommandBar.FocusLine();
         await CheckForUpdatesAsync(manual: false);
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (!ConfirmDiscard())
+        if (!ShowDialogs.ConfirmDiscard(_host, this))
         {
             e.Cancel = true;
             return;
         }
 
-        _statusTimer.Stop();
-        _engine.Dispose();
-        _artNet?.Dispose();
+        _tick.Stop();
+        _host.Settings.LastView = _currentView;
+        _host.Dispose();
     }
 
-    private void CommandLine_PreviewKeyDown(object sender, KeyEventArgs e)
+    // ---- focus: typing always reaches the command line ---------------------------------------------------------
+
+    /// <summary>After clicking a button the command line takes the focus back, unless the click was on an input.</summary>
+    private void Window_PreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
-        switch (e.Key)
-        {
-            case Key.Enter:
-                Submit();
-                e.Handled = true;
-                break;
-            case Key.Escape:
-                CommandLine.Clear();
-                _historyIndex = _history.Count;
-                e.Handled = true;
-                break;
-            case Key.Up when _historyIndex > 0:
-                ShowHistory(--_historyIndex);
-                e.Handled = true;
-                break;
-            case Key.Down when _historyIndex < _history.Count:
-                if (++_historyIndex < _history.Count)
-                    ShowHistory(_historyIndex);
-                else
-                    CommandLine.Clear();
-                e.Handled = true;
-                break;
-        }
+        if (e.OriginalSource is DependencyObject source && !IsInput(source))
+            Dispatcher.BeginInvoke(() => CommandBar.FocusLine(), DispatcherPriority.Input);
     }
 
-    private void ShowHistory(int index)
+    /// <summary>Letters typed while no input has the focus go to the command line, as on a console.</summary>
+    private void Window_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        CommandLine.Text = _history[index];
-        CommandLine.CaretIndex = CommandLine.Text.Length;
-    }
-
-    private void Submit()
-    {
-        var line = CommandLine.Text.Trim();
-        CommandLine.Clear();
-        if (line.Length == 0)
+        if (Keyboard.FocusedElement is TextBoxBase or ComboBox or ComboBoxItem)
             return;
 
-        if (_history.Count == 0 || _history[^1] != line)
-            _history.Add(line);
-        _historyIndex = _history.Count;
-
-        Run(line);
-    }
-
-    private void Run(string line)
-    {
-        AddLog("> " + line, echo: true);
-        var result = _console.Execute(line);
-        if (result.Message.Length > 0)
-            AddLog(result.Message, error: !result.Success);
-    }
-
-    private void AddLog(string text, bool echo = false, bool error = false)
-    {
-        _log.Add(new LogEntry(text, echo, error));
-        while (_log.Count > MaxLogEntries)
-            _log.RemoveAt(0);
-
-        Dispatcher.BeginInvoke(() => LogScroll.ScrollToEnd(), DispatcherPriority.Background);
-    }
-
-    // ---- keypad ----------------------------------------------------------------------------------------------
-
-    /// <summary>Types the key's text into the command line, adding a space where words would run together.</summary>
-    private void Insert_Click(object sender, RoutedEventArgs e)
-    {
-        var text = (string)((FrameworkElement)sender).Tag;
-        var current = CommandLine.Text;
-        var needsSpace = current.Length > 0
-            && !char.IsWhiteSpace(current[^1])
-            && !char.IsAsciiDigit(text[0])
-            && text[0] != '.';
-
-        CommandLine.Text = current + (needsSpace ? " " : "") + text;
-        CommandLine.CaretIndex = CommandLine.Text.Length;
-        CommandLine.Focus();
-    }
-
-    /// <summary>Keys that act at once, like Oops: they do not go through the command line text.</summary>
-    private void Execute_Click(object sender, RoutedEventArgs e)
-    {
-        Run((string)((FrameworkElement)sender).Tag);
-        CommandLine.Focus();
-    }
-
-    /// <summary>Like on grandMA: the first press empties the command line, the next ones step back through Clear.</summary>
-    private void Clear_Click(object sender, RoutedEventArgs e)
-    {
-        if (CommandLine.Text.Length > 0)
-            CommandLine.Clear();
-        else
-            Run("Clear");
-
-        CommandLine.Focus();
-    }
-
-    private void Backspace_Click(object sender, RoutedEventArgs e)
-    {
-        if (CommandLine.Text.Length > 0)
-            CommandLine.Text = CommandLine.Text[..^1];
-
-        CommandLine.CaretIndex = CommandLine.Text.Length;
-        CommandLine.Focus();
-    }
-
-    private void Please_Click(object sender, RoutedEventArgs e)
-    {
-        Submit();
-        CommandLine.Focus();
-    }
-
-    // ---- cuelist panel ---------------------------------------------------------------------------------------
-
-    private void CuelistGo_Click(object sender, RoutedEventArgs e) => Run($"Go Cuelist {_cuelistNumber}");
-
-    private void CuelistBack_Click(object sender, RoutedEventArgs e) => Run($"Back Cuelist {_cuelistNumber}");
-
-    private void CuelistOff_Click(object sender, RoutedEventArgs e) => Run($"Off Cuelist {_cuelistNumber}");
-
-    private void PreviousCuelist_Click(object sender, RoutedEventArgs e) => StepCuelist(-1);
-
-    private void NextCuelist_Click(object sender, RoutedEventArgs e) => StepCuelist(1);
-
-    private void StepCuelist(int direction)
-    {
-        var numbers = _console.Read((show, _) => show.Cuelists.Keys.ToList());
-        if (numbers.Count == 0)
-            return;
-
-        var index = numbers.IndexOf(_cuelistNumber);
-        _cuelistNumber = numbers[index < 0 ? 0 : Math.Clamp(index + direction, 0, numbers.Count - 1)];
-        RefreshViews();
-    }
-
-    // ---- DMX monitor -----------------------------------------------------------------------------------------
-
-    private void PreviousUniverse_Click(object sender, RoutedEventArgs e) =>
-        _monitorUniverse = Math.Max(1, _monitorUniverse - 1);
-
-    private void NextUniverse_Click(object sender, RoutedEventArgs e) =>
-        _monitorUniverse = Math.Min(ArtNetPacket.MaxUniverse, _monitorUniverse + 1);
-
-    private static string FormatUniverse(byte[]? data)
-    {
-        if (data is null)
-            return "No fixtures are patched in this universe.";
-
-        var text = new StringBuilder();
-        for (var row = 0; row < 32; row++)
-        {
-            text.Append($"{row * 16 + 1:000}: ");
-            for (var column = 0; column < 16; column++)
-            {
-                var value = data[row * 16 + column];
-                text.Append(value == 0 ? "  ." : value.ToString().PadLeft(3)).Append(' ');
-            }
-
-            text.Append('\n');
-        }
-
-        return text.ToString();
-    }
-
-    // ---- Art-Net settings ------------------------------------------------------------------------------------
-
-    private void ApplyArtNet_Click(object sender, RoutedEventArgs e)
-    {
-        ApplyArtNet();
-        CommandLine.Focus();
-    }
-
-    private void Settings_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter)
-            return;
-
-        ApplyArtNet();
-        CommandLine.Focus();
+        CommandBar.TypeText(e.Text);
         e.Handled = true;
     }
 
-    private void OutputEnabled_Changed(object sender, RoutedEventArgs e)
+    private static bool IsInput(DependencyObject? element)
     {
-        if (IsLoaded)
-            _engine.Output = OutputEnabled.IsChecked == true ? _artNet : null;
-    }
-
-    private void ApplyArtNet()
-    {
-        try
+        while (element is not null)
         {
-            var target = ParseAddress(TargetIp.Text, "Art-Net target");
-            var local = LocalIp.Text.Trim().Length > 0 ? ParseAddress(LocalIp.Text, "Local IP") : null;
+            if (element is TextBoxBase or ComboBox or ComboBoxItem or ScrollBar or Thumb or GridSplitter or DataGridCell)
+                return true;
 
-            var output = new ArtNetOutput(target, localAddress: local);
-            var previous = _artNet;
-            _artNet = output;
-            _engine.Output = OutputEnabled.IsChecked == true ? output : null;
-            previous?.Dispose();
-            _setupError = null;
+            element = element is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(element) ?? LogicalTreeHelper.GetParent(element)
+                : LogicalTreeHelper.GetParent(element);
         }
-        catch (Exception ex) when (ex is FormatException or SocketException)
-        {
-            _setupError = ex.Message;
-        }
+
+        return false;
     }
-
-    private static IPAddress ParseAddress(string text, string what)
-    {
-        if (!IPAddress.TryParse(text.Trim(), out var address) || address.AddressFamily != AddressFamily.InterNetwork)
-            throw new FormatException($"{what}: '{text.Trim()}' is not an IPv4 address");
-
-        return address;
-    }
-
-    // ---- show files ------------------------------------------------------------------------------------------
-
-    private const string DialogFilter = "NX-DMX show (*.nxshow)|*.nxshow|All files (*.*)|*.*";
-
-    private bool HasUnsavedChanges => _console.ExportShow() != _savedJson;
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -377,13 +146,16 @@ public partial class MainWindow : Window
         switch (e.Key)
         {
             case Key.S:
-                if (shift) SaveShowAs(); else SaveShow();
+                if (shift) ShowDialogs.SaveAs(_host, this); else ShowDialogs.Save(_host, this);
                 break;
             case Key.O:
-                OpenShow();
+                ShowDialogs.Open(_host, this);
                 break;
             case Key.N:
-                NewShow();
+                ShowDialogs.New(_host, this);
+                break;
+            case >= Key.D1 and <= Key.D9:
+                Select(Views[e.Key - Key.D1].Key);
                 break;
             default:
                 return;
@@ -392,173 +164,94 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void NewShow_Click(object sender, RoutedEventArgs e) => NewShow();
+    // ---- views -----------------------------------------------------------------------------------------------
 
-    private void OpenShow_Click(object sender, RoutedEventArgs e) => OpenShow();
-
-    private void SaveShow_Click(object sender, RoutedEventArgs e) => SaveShow();
-
-    private void SaveShowAs_Click(object sender, RoutedEventArgs e) => SaveShowAs();
-
-    private void NewShow()
+    private void Nav_Checked(object sender, RoutedEventArgs e)
     {
-        if (!ConfirmDiscard())
+        if (sender is RadioButton { Uid: { Length: > 0 } key } && IsLoaded)
+            Display(key);
+    }
+
+    private void Select(string key)
+    {
+        var button = new[] { NavFixtures, NavGroups, NavCuelists, NavPatch, NavProfiles, NavUniverses, NavOutput, NavRemote, NavShow }
+            .FirstOrDefault(b => b.Uid == key);
+        if (button is null)
             return;
 
-        _console.ImportShow(ShowFile.Serialize(new Show()));
-        _showPath = null;
-        _savedJson = _console.ExportShow();
-        AfterShowReplaced();
-        AddLog("New empty show. Patch fixtures with: Patch Fixture 1 Thru 8 Type RGBDim At 1.1");
+        if (button.IsChecked == true)
+            Display(key);
+        else
+            button.IsChecked = true;
     }
 
-    private void OpenShow()
+    private void Display(string key)
     {
-        if (!ConfirmDiscard())
+        if (key == _currentView)
             return;
 
-        var dialog = new OpenFileDialog
+        if (!_views.TryGetValue(key, out var view))
         {
-            Filter = DialogFilter,
-            InitialDirectory = EnsureShowsFolder(),
-            Title = "Open show",
-        };
-        if (dialog.ShowDialog(this) != true)
-            return;
-
-        try
-        {
-            _console.ImportShow(ShowStorage.Read(dialog.FileName));
-        }
-        catch (Exception ex) when (ex is ShowFileException or IOException or UnauthorizedAccessException)
-        {
-            AddLog($"Could not open {Path.GetFileName(dialog.FileName)}: {ex.Message}", error: true);
-            MessageBox.Show(this, ex.Message, "Open show", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
+            view = Create(key);
+            _views[key] = view;
         }
 
-        _showPath = dialog.FileName;
-        _savedJson = _console.ExportShow();
-        AfterShowReplaced();
-        AddLog($"Opened {Path.GetFileName(dialog.FileName)}.");
+        _currentView = key;
+        ViewTitle.Text = Views.First(v => v.Key == key).Title;
+        ViewHost.Content = view;
+        view.Activated();
     }
 
-    /// <summary>Saves under the current name, or asks for one. Returns false when the operator cancelled or it failed.</summary>
-    private bool SaveShow() => _showPath is null ? SaveShowAs() : WriteShow(_showPath);
-
-    private bool SaveShowAs()
+    private ConsoleView Create(string key) => key switch
     {
-        var dialog = new SaveFileDialog
-        {
-            Filter = DialogFilter,
-            DefaultExt = ShowFile.Extension,
-            AddExtension = true,
-            InitialDirectory = _showPath is null ? EnsureShowsFolder() : Path.GetDirectoryName(_showPath),
-            FileName = _showPath is null ? "My show" : Path.GetFileName(_showPath),
-            Title = "Save show",
-        };
+        "Fixtures" => new FixturesView(_host),
+        "Groups" => new GroupsView(_host),
+        "Cuelists" => new CuelistsView(_host),
+        "Patch" => new PatchView(_host),
+        "Profiles" => new ProfilesView(_host),
+        "Universes" => new UniversesView(_host),
+        "Output" => new OutputView(_host),
+        "Remote" => new RemoteView(_host),
+        "Show" => new ShowView(_host),
+        _ => throw new ArgumentException("Unknown view " + key),
+    };
 
-        return dialog.ShowDialog(this) == true && WriteShow(dialog.FileName);
+    private void OnStateChanged()
+    {
+        _views.GetValueOrDefault(_currentView)?.Refresh();
+        MasterBar.Value = _host.Snapshot.Master;
+        BlackoutButton.IsChecked = _host.Snapshot.Blackout;
     }
 
-    private bool WriteShow(string path)
+    private void SetKeypadVisible(bool visible)
     {
-        var json = _console.ExportShow();
-        try
-        {
-            ShowStorage.Write(path, json);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            AddLog($"Could not save {Path.GetFileName(path)}: {ex.Message}", error: true);
-            MessageBox.Show(this, ex.Message, "Save show", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
-        }
-
-        _showPath = path;
-        _savedJson = json;
-        UpdateShowState();
-        AddLog($"Saved {Path.GetFileName(path)}.");
-        return true;
+        Pad.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        _host.Settings.KeypadVisible = visible;
     }
 
-    /// <summary>Asks what to do with unsaved changes. Returns false when the operator cancelled.</summary>
-    private bool ConfirmDiscard()
+    private void Blackout_Click(object sender, RoutedEventArgs e) => _host.Run("Blackout");
+
+    // ---- header ----------------------------------------------------------------------------------------------
+
+    private void UpdateHeader()
     {
-        if (!HasUnsavedChanges)
-            return true;
+        ShowName.Text = _host.ShowTitle;
+        ShowDirty.Visibility = _host.IsDirty ? Visibility.Visible : Visibility.Collapsed;
+        Title = $"NX-DMX {_host.Updates.CurrentVersion} · {_host.ShowTitle}{(_host.IsDirty ? " *" : "")}";
 
-        var answer = MessageBox.Show(this,
-            $"Save the changes to \"{ShowTitle()}\" first?",
-            "NX-DMX", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
-
-        return answer switch
+        StatusText.Text = _host.OutputStatus;
+        StatusLed.Background = (Brush)FindResource(_host.Health switch
         {
-            MessageBoxResult.Yes => SaveShow(),
-            MessageBoxResult.No => true,
-            _ => false,
-        };
-    }
-
-    private static string EnsureShowsFolder()
-    {
-        try
-        {
-            Directory.CreateDirectory(ShowStorage.ShowsFolder);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // The dialog then simply opens in its default folder.
-        }
-
-        return ShowStorage.ShowsFolder;
-    }
-
-    private void AfterShowReplaced()
-    {
-        _cuelistNumber = _console.Read((show, _) => show.Cuelists.Keys.FirstOrDefault(1));
-        RefreshViews();
-        UpdateShowState();
-        CommandLine.Focus();
-    }
-
-    private string ShowTitle() => _showPath is null ? "Untitled" : Path.GetFileNameWithoutExtension(_showPath);
-
-    /// <summary>Updates the show name and the unsaved marker, and keeps the autosave current.</summary>
-    private void UpdateShowState()
-    {
-        var json = _console.ExportShow();
-        var dirty = json != _savedJson;
-
-        ShowName.Text = ShowTitle();
-        ShowDirty.Visibility = dirty ? Visibility.Visible : Visibility.Collapsed;
-        Title = $"NX-DMX {_updates.CurrentVersion} · {ShowTitle()}{(dirty ? " *" : "")}";
-
-        if (json != _autosavedJson || _showPath != _autosavedPath)
-            Autosave(json);
-    }
-
-    private void Autosave(string json)
-    {
-        try
-        {
-            ShowStorage.WriteAutosave(json, _showPath);
-            _autosavedJson = json;
-            _autosavedPath = _showPath;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Not worth interrupting the operator; the next change tries again.
-        }
+            OutputHealth.Sending => "GreenBrush",
+            OutputHealth.Error => "RedBrush",
+            _ => "MutedBrush",
+        });
+        StatusText.Foreground = (Brush)FindResource(_host.Health == OutputHealth.Error ? "RedBrush" : "DimBrush");
     }
 
     // ---- updates ---------------------------------------------------------------------------------------------
 
-    private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
-    {
-        await CheckForUpdatesAsync(manual: true);
-        CommandLine.Focus();
-    }
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e) => await CheckForUpdatesAsync(manual: true);
 
     /// <summary>
     /// Looks for a newer release. It only ever shows a button and never restarts by itself: the console may be running
@@ -569,39 +262,42 @@ public partial class MainWindow : Window
         if (_updateBusy || _availableUpdate is not null)
         {
             if (manual)
-                AddLog(_availableUpdate is null
+            {
+                _host.AddLog(_availableUpdate is null
                     ? "Already checking for updates."
-                    : $"NX-DMX {_availableUpdate.TargetFullRelease.Version} is available. Press the green Update button in the top bar.");
+                    : $"NX-DMX {_availableUpdate.TargetFullRelease.Version} is available. Press the green Update button on the left.");
+            }
+
             return;
         }
 
-        if (!_updates.IsInstalled)
+        if (!_host.Updates.IsInstalled)
         {
             if (manual)
-                AddLog("Updates only work in an installed copy. Install NX-DMX with the Setup.exe from the GitHub release page.");
+                _host.AddLog("Updates only work in an installed copy. Install NX-DMX with the Setup.exe from the GitHub release page.");
             return;
         }
 
         _updateBusy = true;
         try
         {
-            var update = await _updates.CheckAsync();
+            var update = await _host.Updates.CheckAsync();
             if (update is null)
             {
                 if (manual)
-                    AddLog($"NX-DMX {_updates.CurrentVersion} is up to date.");
+                    _host.AddLog($"NX-DMX {_host.Updates.CurrentVersion} is up to date.");
                 return;
             }
 
             _availableUpdate = update;
-            UpdateButton.Content = $"Update to {update.TargetFullRelease.Version}";
+            UpdateButton.Content = $"Update\n{update.TargetFullRelease.Version}";
             UpdateButton.Visibility = Visibility.Visible;
-            AddLog($"NX-DMX {update.TargetFullRelease.Version} is available. Press the green Update button in the top bar to install it.");
+            _host.AddLog($"NX-DMX {update.TargetFullRelease.Version} is available. Press the green Update button on the left to install it.");
         }
         catch (Exception ex)
         {
             if (manual)
-                AddLog($"Update check failed: {ex.Message}", error: true);
+                _host.AddLog($"Update check failed: {ex.Message}", error: true);
         }
         finally
         {
@@ -619,9 +315,9 @@ public partial class MainWindow : Window
         UpdateButton.IsEnabled = false;
         try
         {
-            UpdateButton.Content = "Downloading 0 %";
-            await _updates.DownloadAsync(update, percent =>
-                Dispatcher.BeginInvoke(() => UpdateButton.Content = $"Downloading {percent} %"));
+            UpdateButton.Content = "0 %";
+            await _host.Updates.DownloadAsync(update, percent =>
+                Dispatcher.BeginInvoke(() => UpdateButton.Content = $"{percent} %"));
 
             var restartNow = MessageBox.Show(this,
                 $"NX-DMX {version} has been downloaded.\n\n" +
@@ -632,75 +328,24 @@ public partial class MainWindow : Window
 
             if (restartNow)
             {
-                Autosave(_console.ExportShow());
-                _updates.ApplyAndRestart(update);
+                _host.Autosave();
+                _host.Updates.ApplyAndRestart(update);
                 return;
             }
 
-            _updates.ApplyOnExit(update);
-            UpdateButton.Content = "Installs on exit";
-            AddLog($"NX-DMX {version} will be installed the next time you close the program.");
+            _host.Updates.ApplyOnExit(update);
+            UpdateButton.Content = "Installs\non exit";
+            _host.AddLog($"NX-DMX {version} will be installed the next time you close the program.");
         }
         catch (Exception ex)
         {
-            AddLog($"Update failed: {ex.Message}", error: true);
-            UpdateButton.Content = $"Update to {version}";
+            _host.AddLog($"Update failed: {ex.Message}", error: true);
+            UpdateButton.Content = $"Update\n{version}";
             UpdateButton.IsEnabled = true;
         }
         finally
         {
             _updateBusy = false;
         }
-    }
-
-    // ---- refreshing the panels -------------------------------------------------------------------------------
-
-    private void RefreshViews()
-    {
-        var snapshot = _console.Read((show, programmer) => ConsoleSnapshot.Build(show, programmer, _cuelistNumber));
-
-        FixtureGrid.ItemsSource = snapshot.Fixtures;
-        CueGrid.ItemsSource = snapshot.Cues;
-        GroupGrid.ItemsSource = snapshot.Groups;
-        CuelistTitle.Text = snapshot.CuelistTitle;
-        SelectionText.Text = snapshot.Selection.Length == 0
-            ? ""
-            : $"SEL {snapshot.Selection}   PRG {snapshot.ProgrammerValueCount}";
-    }
-
-    private void UpdateStatus()
-    {
-        var now = DateTime.UtcNow;
-        var frames = _engine.FramesSent;
-        var elapsed = (now - _lastFrameTime).TotalSeconds;
-        if (elapsed >= 1)
-        {
-            _frameRate = (frames - _lastFrameCount) / elapsed;
-            _lastFrameCount = frames;
-            _lastFrameTime = now;
-        }
-
-        var frame = _engine.LastFrame;
-        var universes = frame is null ? "" : string.Join(", ", frame.Universes.Keys);
-
-        if (_setupError is not null)
-            SetStatus($"Setup error: {_setupError}", "BadBrush");
-        else if (_engine.Output is null)
-            SetStatus("Output off", "MutedBrush");
-        else if (_engine.LastError is { } error)
-            SetStatus($"Send error: {error}", "BadBrush");
-        else
-            SetStatus($"{_frameRate:0} Hz · universes {(universes.Length == 0 ? "none" : universes)}", "GoodBrush");
-
-        MonitorTitle.Text = $"DMX OUTPUT · UNIVERSE {_monitorUniverse}";
-        byte[]? data = null;
-        frame?.Universes.TryGetValue(_monitorUniverse, out data);
-        MonitorText.Text = FormatUniverse(data);
-    }
-
-    private void SetStatus(string text, string brushKey)
-    {
-        StatusText.Text = text;
-        StatusText.Foreground = (Brush)FindResource(brushKey);
     }
 }

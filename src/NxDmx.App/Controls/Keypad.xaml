@@ -1,0 +1,77 @@
+<UserControl x:Class="NxDmx.App.Controls.Keypad"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="#050505" BorderBrush="{StaticResource LineBrush}" BorderThickness="1,0,0,0" Padding="8">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="82"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Function keys: they type their word into the command line -->
+            <UniformGrid Columns="4" Rows="5">
+                <Button Content="Record" Style="{StaticResource KeyRecord}" Tag="Record " Click="Insert_Click"/>
+                <Button Content="Update" Style="{StaticResource KeyButton}" Tag="Update " Click="Insert_Click"/>
+                <Button Content="Delete" Style="{StaticResource KeyButton}" Tag="Delete " Click="Insert_Click"/>
+                <Button Content="Label" Style="{StaticResource KeyButton}" Tag="Label " Click="Insert_Click"/>
+                <Button Content="Fixture" Style="{StaticResource KeyAccent}" Tag="Fixture " Click="Insert_Click"/>
+                <Button Content="Group" Style="{StaticResource KeyAccent}" Tag="Group " Click="Insert_Click"/>
+                <Button Content="Cue" Style="{StaticResource KeyButton}" Tag="Cue " Click="Insert_Click"/>
+                <Button Content="Cuelist" Style="{StaticResource KeyButton}" Tag="Cuelist " Click="Insert_Click"/>
+                <Button Content="Go" Style="{StaticResource KeyGo}" Tag="Go" Click="Run_Click"/>
+                <Button Content="Back" Style="{StaticResource KeyButton}" Tag="Back" Click="Run_Click"/>
+                <Button Content="Off" Style="{StaticResource KeyButton}" Tag="Off" Click="Run_Click"/>
+                <Button Content="Goto" Style="{StaticResource KeyButton}" Tag="Goto Cue " Click="Insert_Click"/>
+                <Button Content="Color" Style="{StaticResource KeyButton}" Tag="Color " Click="Insert_Click"/>
+                <Button Content="Patch" Style="{StaticResource KeyButton}" Tag="Patch Fixture " Click="Insert_Click"/>
+                <Button Content="Universe" Style="{StaticResource KeyButton}" Tag="Universe " Click="Insert_Click"/>
+                <Button Content="Type" Style="{StaticResource KeyButton}" Tag="Type " Click="Insert_Click"/>
+                <Button Content="Blackout" Style="{StaticResource KeyRecord}" Tag="Blackout" Click="Run_Click"/>
+                <Button Content="Master" Style="{StaticResource KeyButton}" Tag="Master At " Click="Insert_Click"/>
+                <Button Content="ClearAll" Style="{StaticResource KeyButton}" Tag="ClearAll" Click="Run_Click"/>
+                <Button Content="Help" Style="{StaticResource KeyButton}" Tag="Help" Click="Run_Click"/>
+            </UniformGrid>
+
+            <!-- Numbers -->
+            <UniformGrid Grid.Column="2" Columns="4" Rows="5">
+                <Button Content="7" Style="{StaticResource KeyButton}" Tag="7" Click="Insert_Click"/>
+                <Button Content="8" Style="{StaticResource KeyButton}" Tag="8" Click="Insert_Click"/>
+                <Button Content="9" Style="{StaticResource KeyButton}" Tag="9" Click="Insert_Click"/>
+                <Button Content="Thru" Style="{StaticResource KeyAccent}" Tag="Thru " Click="Insert_Click"/>
+                <Button Content="4" Style="{StaticResource KeyButton}" Tag="4" Click="Insert_Click"/>
+                <Button Content="5" Style="{StaticResource KeyButton}" Tag="5" Click="Insert_Click"/>
+                <Button Content="6" Style="{StaticResource KeyButton}" Tag="6" Click="Insert_Click"/>
+                <Button Content="+" Style="{StaticResource KeyAccent}" Tag="+ " Click="Insert_Click"/>
+                <Button Content="1" Style="{StaticResource KeyButton}" Tag="1" Click="Insert_Click"/>
+                <Button Content="2" Style="{StaticResource KeyButton}" Tag="2" Click="Insert_Click"/>
+                <Button Content="3" Style="{StaticResource KeyButton}" Tag="3" Click="Insert_Click"/>
+                <Button Content="-" Style="{StaticResource KeyAccent}" Tag="- " Click="Insert_Click"/>
+                <Button Content="0" Style="{StaticResource KeyButton}" Tag="0" Click="Insert_Click"/>
+                <Button Content="." Style="{StaticResource KeyButton}" Tag="." Click="Insert_Click"/>
+                <Button Content="At" Style="{StaticResource KeyAccent}" Tag="At " Click="Insert_Click"/>
+                <Button Content="Full" Style="{StaticResource KeyAccent}" Tag="Full " Click="Insert_Click"/>
+                <Button Content="Red" Style="{StaticResource KeyButton}" Tag="Red " Click="Insert_Click"/>
+                <Button Content="Green" Style="{StaticResource KeyButton}" Tag="Green " Click="Insert_Click"/>
+                <Button Content="Blue" Style="{StaticResource KeyButton}" Tag="Blue " Click="Insert_Click"/>
+                <Button Content="Pan" Style="{StaticResource KeyButton}" Tag="Pan " Click="Insert_Click"/>
+            </UniformGrid>
+
+            <!-- Confirm column -->
+            <Grid Grid.Column="4">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="2*"/>
+                </Grid.RowDefinitions>
+                <Button Content="Oops" Style="{StaticResource KeyAccent}" Tag="Oops" Click="Run_Click" AutomationProperties.AutomationId="OopsKey"/>
+                <Button Grid.Row="1" Content="Clear" Style="{StaticResource KeyButton}" Click="Clear_Click"/>
+                <Button Grid.Row="2" Content="⌫" Style="{StaticResource KeyButton}" Click="Backspace_Click"/>
+                <Button Grid.Row="3" Content="Please" Style="{StaticResource KeyPlease}" Click="Please_Click" AutomationProperties.AutomationId="PleaseKey"/>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

@@ -1,0 +1,66 @@
+<UserControl x:Class="NxDmx.App.Controls.InfoPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,6,8,4">
+                <RadioButton x:Name="ProgrammerTab" Style="{StaticResource ChipRadio}" Content="PROGRAMMER" GroupName="Info"
+                             IsChecked="True" Focusable="False" Checked="Tab_Checked" Margin="0,0,4,0"/>
+                <RadioButton x:Name="LogTab" Style="{StaticResource ChipRadio}" Content="COMMAND LOG" GroupName="Info"
+                             Focusable="False" Checked="Tab_Checked" Margin="0,0,4,0"/>
+                <RadioButton x:Name="HelpTab" Style="{StaticResource ChipRadio}" Content="HELP" GroupName="Info"
+                             Focusable="False" Checked="Tab_Checked"/>
+                <TextBlock x:Name="Hint" FontSize="12" VerticalAlignment="Center" Margin="16,0,0,0" TextTrimming="CharacterEllipsis" MaxWidth="460"
+                           AutomationProperties.AutomationId="Feedback"/>
+            </StackPanel>
+
+            <Grid>
+                <!-- Programmer table: one row per fixture, one column per attribute; red = set in the programmer -->
+                <DataGrid x:Name="ProgrammerGrid" Margin="4,0,4,4" IsHitTestVisible="True" RowHeight="22" Focusable="False"
+                          AutomationProperties.AutomationId="ProgrammerTable">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="FIXTURE" Binding="{Binding Id}" Width="64"/>
+                        <DataGridTextColumn Header="LABEL" Binding="{Binding Label}" Width="150"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock x:Name="ProgrammerEmpty" Text="Nothing selected. Click fixtures, or type Fixture 1 Thru 4." Foreground="{StaticResource MutedBrush}"
+                           HorizontalAlignment="Left" VerticalAlignment="Top" Margin="14,10,0,0"/>
+
+                <ScrollViewer x:Name="LogScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" Focusable="False" Margin="4,0,4,4">
+                    <ItemsControl x:Name="LogList" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="6,1">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="64"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding TimeText}" FontFamily="Consolas" FontSize="11" Foreground="{StaticResource MutedBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Text}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                <Setter Property="Foreground" Value="{StaticResource DimBrush}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsEcho}" Value="True">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsError}" Value="True">
+                                                        <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <ScrollViewer x:Name="HelpScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" Focusable="False" Margin="4,0,4,4">
+                    <TextBlock x:Name="HelpText" FontFamily="Consolas" FontSize="12" Foreground="{StaticResource DimBrush}" Margin="10,4" TextWrapping="Wrap"/>
+                </ScrollViewer>
+            </Grid>
+        </DockPanel>
+    </Border>
+</UserControl>

@@ -11,12 +11,14 @@ internal sealed class Rig
 {
     public Rig()
     {
-        Interpreter = new CommandInterpreter(Show, Programmer);
+        Interpreter = new CommandInterpreter(Show, Programmer, Output);
     }
 
     public Show Show { get; } = new();
 
     public Programmer Programmer { get; } = new();
+
+    public OutputState Output { get; } = new();
 
     public CommandInterpreter Interpreter { get; }
 
@@ -39,7 +41,7 @@ internal sealed class Rig
         return result;
     }
 
-    public byte[] Universe(int universe) => FrameRenderer.Render(Show, Programmer).Universes[universe];
+    public byte[] Universe(int universe) => FrameRenderer.Render(Show, Programmer, Output).Universes[universe];
 
     public double Value(int fixtureId, FixtureAttribute attribute) =>
         Programmer.Values[new ValueKey(fixtureId, attribute)];

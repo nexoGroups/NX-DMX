@@ -1,0 +1,44 @@
+<UserControl x:Class="NxDmx.App.Controls.CommandLineBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="#050505" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
+        <Grid Height="46">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Text="NX&gt;" FontFamily="Consolas" FontSize="22" Foreground="{StaticResource AmberBrush}"
+                       Margin="16,0,10,0" VerticalAlignment="Center"/>
+            <TextBox x:Name="Line" Grid.Column="1" FontFamily="Consolas" FontSize="21" Background="Transparent"
+                     BorderThickness="0" Padding="0" VerticalContentAlignment="Center" Foreground="White"
+                     AutomationProperties.AutomationId="CommandLine"
+                     PreviewKeyDown="Line_PreviewKeyDown" TextChanged="Line_TextChanged">
+                <TextBox.Template>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>
+                    </ControlTemplate>
+                </TextBox.Template>
+            </TextBox>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0">
+                <TextBlock x:Name="SelectionText" FontFamily="Consolas" FontSize="13" Foreground="{StaticResource AmberBrush}"
+                           VerticalAlignment="Center" Margin="0,0,14,0"/>
+                <TextBlock x:Name="ProgrammerText" FontFamily="Consolas" FontSize="13" Foreground="{StaticResource RedBrush}"
+                           VerticalAlignment="Center" Margin="0,0,14,0"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                <ToggleButton x:Name="KeypadToggle" Style="{StaticResource Chip}" Content="KEYS" Focusable="False" Margin="0,0,6,0"
+                              ToolTip="Show or hide the keypad" Click="KeypadToggle_Click"/>
+                <Button Content="Oops" Style="{StaticResource KeyAccent}" Focusable="False" Width="58" MinHeight="30" Margin="0,0,6,0"
+                        ToolTip="Take back the last programming step" Click="Oops_Click" AutomationProperties.AutomationId="OopsTop"/>
+                <Button Content="Clear" Style="{StaticResource KeyButton}" Width="58" MinHeight="30" Margin="0,0,6,0" Click="Clear_Click"/>
+                <Button Content="Please" Style="{StaticResource KeyPlease}" Width="82" MinHeight="30" Margin="0"
+                        AutomationProperties.AutomationId="PleaseTop" Click="Please_Click"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

@@ -66,8 +66,26 @@ internal sealed class TokenStream(List<Token> tokens)
         return value;
     }
 
-    public decimal ExpectNumber(string what) =>
-        decimal.Parse(ExpectNumberText(what), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
+    public decimal ExpectNumber(string what)
+    {
+        var text = ExpectNumberText(what);
+        return decimal.TryParse(text, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : throw new CommandException($"{what} must be a number, not '{text}'");
+    }
+
+    /// <summary>A name given as text in quotes, or as one or more plain words up to the next keyword in <paramref name="stopWords"/>.</summary>
+    public string? AcceptName(params string[] stopWords)
+    {
+        if (AcceptText() is { } text)
+            return text;
+
+        var words = new List<string>();
+        while (Peek is { Kind: TokenKind.Word } word && !stopWords.Contains(word.Text))
+            words.Add(Next().Text);
+
+        return words.Count == 0 ? null : string.Join(' ', words);
+    }
 
     public string? AcceptText() => Peek is { Kind: TokenKind.Text } ? Next().Text : null;
 }

@@ -133,7 +133,7 @@ public class ShowFileTests
                 case "overflow": first["Address"] = 512; break;   // RGBDim needs 4 channels
                 case "universe": first["Universe"] = 40000; break;
                 case "duplicate": fixtures.Add(JsonNode.Parse(first.ToJsonString())); break;
-                case "attribute": value["Attribute"] = "Strobe"; break;
+                case "attribute": value["Attribute"] = "Bogus"; break;
                 case "value": value["Value"] = 1.5; break;
             }
         });
@@ -180,7 +180,7 @@ public class ShowFileTests
 
         using var doc = JsonDocument.Parse(json);
         Assert.Equal("nx-dmx-show", doc.RootElement.GetProperty("Format").GetString());
-        Assert.Equal(1, doc.RootElement.GetProperty("Version").GetInt32());
+        Assert.Equal(2, doc.RootElement.GetProperty("Version").GetInt32());
         Assert.Contains('\n', json);
     }
 }

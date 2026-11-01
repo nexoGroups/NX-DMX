@@ -1,5 +1,6 @@
 using System.Globalization;
 using NxDmx.Core.ArtNet;
+using NxDmx.Core.Engine;
 using NxDmx.Core.Fixtures;
 using NxDmx.Core.Playback;
 using NxDmx.Core.Programming;
@@ -10,13 +11,16 @@ namespace NxDmx.Core.Commands;
 /// Executes console commands in the style of grandMA and ONYX: <c>Fixture 1 Thru 10 At 50</c>,
 /// <c>Record Cue 1</c>, <c>Go</c>. Not thread-safe; callers serialise access (see <see cref="LightingConsole"/>).
 /// </summary>
-public sealed class CommandInterpreter(Show show, Programmer programmer)
+public sealed partial class CommandInterpreter(Show show, Programmer programmer, OutputState? output = null)
 {
     private const int MaxPatchRange = 4096;
     private const int MaxUndoSteps = 100;
 
-    /// <summary>Playback actions and help are live operations: they are not recorded for Oops.</summary>
-    private static readonly HashSet<string> LiveCommands = ["go", "back", "goto", "off", "release", "help"];
+    private readonly OutputState _output = output ?? new OutputState();
+
+    /// <summary>Playback actions, output controls and help are live operations: they are not recorded for Oops.</summary>
+    private static readonly HashSet<string> LiveCommands =
+        ["go", "back", "goto", "off", "release", "toggle", "blackout", "master", "help"];
 
     private readonly List<(ShowSnapshot State, string Command)> _undo = [];
 
@@ -26,17 +30,22 @@ public sealed class CommandInterpreter(Show show, Programmer programmer)
 
     public const string HelpText = """
         Select      Fixture 1 Thru 10 | Fixture 1 + 5 + 7 Thru 9 | Fixture 1 Thru 10 - 5 | Group 2
-        Values      At 50 | At Full | Full | Red At 100 | Pan At 25   (percent of the selection)
+        Values      At 50 | At Full | Full | Red At 100 | Pan At 25 Tilt At 70   (percent of the selection)
+        Function    Gobo Function "Gobo 2" | ColorWheel Function Red   (named range of the profile)
+        Color       Color Red | Color "Warm White"   (sets every colour emitter the fixture has)
         Record      Record Cue 1 ["Name"] [Cuelist 2] | Record Group 3 ["Name"]
         Update      Update Cue 1 [Cuelist 2]   (merges the programmer into the cue)
-        Delete      Delete Cue 1 [Cuelist 2] | Delete Group 3 | Delete Cuelist 2 | Delete Fixture 1 Thru 5
-        Label       Label Group 3 "Front" | Label Cue 1 "Intro" | Label Fixture 5 "Spot L"
-        Playback    Go | Go - | Back | Goto Cue 5 | Off   (add Cuelist n for another cuelist)
-        Patch       Patch Fixture 1 Thru 8 Type RGBDim At 1.1   (universe.address, or an absolute address)
+        Delete      Delete Cue 1 [Cuelist 2] | Delete Group 3 | Delete Cuelist 2 | Delete Fixture 1 Thru 5 | Delete Universe 3
+        Label       Label Group 3 "Front" | Label Cue 1 "Intro" | Label Fixture 5 "Spot L" | Label Universe 2 "FOH"
+        Playback    Go | Go - | Back | Goto Cue 5 | Off | Toggle   (add Cuelist n for another cuelist)
+        Output      Blackout [On|Off] | Master At 80
+        Patch       Patch Fixture 1 Thru 8 Type RGBDim At 1.1 [Label "Wash"]   (universe.address, or an absolute address)
+                    Patch Fixture 5 At 2.1 moves, Patch Fixture 5 Type RGB changes the profile of existing fixtures
+        Universe    Universe 2 [Label "FOH"] [Unicast 10.0.0.5 | Broadcast] [On | Off]
         Clear       Clear (deselect, then clear programmer) | ClearAll
         Oops        Undoes the last programming step, repeatable (not Go/Back/Off)
         Please      Optional at the end of a line, like on grandMA2: Fixture 1 At 50 Please
-        Types       Dimmer, RGB, RGBW, RGBDim, Mover
+        Profiles    Dimmer, RGB, RGBW, RGBDim, Mover, Spot Mover, and the ones made in the Fixture Manager
         """;
 
     /// <summary>
@@ -81,6 +90,12 @@ public sealed class CommandInterpreter(Show show, Programmer programmer)
             before?.Restore(show, programmer);
             return CommandResult.Error(ex.Message);
         }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // A bug must never take the console down in the middle of a show: undo what the command did so far and say so.
+            before?.Restore(show, programmer);
+            return CommandResult.Error($"Internal error, nothing was changed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     /// <summary>Forgets all Oops steps, e.g. after loading a show.</summary>
@@ -113,7 +128,7 @@ public sealed class CommandInterpreter(Show show, Programmer programmer)
         {
             case "fixture" or "group":
                 return SelectAndApply(t);
-            case "at" or "full":
+            case "at" or "full" or "function":
                 return ApplyValue(t);
         }
 
@@ -128,6 +143,11 @@ public sealed class CommandInterpreter(Show show, Programmer programmer)
             "back" => Back(t),
             "goto" => GoTo(t),
             "off" or "release" => Off(t),
+            "toggle" => Toggle(t),
+            "blackout" => Blackout(t),
+            "master" => Master(t),
+            "color" => ApplyColor(t),
+            "universe" => UniverseCommand(t),
             "patch" => PatchFixtures(t),
             "clear" => Clear(t, everything: false),
             "clearall" => Clear(t, everything: true),
@@ -227,49 +247,6 @@ public sealed class CommandInterpreter(Show show, Programmer programmer)
 
     // ---- values ----------------------------------------------------------------------------------------------
 
-    private CommandResult ApplyValue(TokenStream t)
-    {
-        var attribute = FixtureAttribute.Dimmer;
-        if (t.Peek is { Kind: TokenKind.Word } word && FixtureAttributeExtensions.TryParse(word.Text, out var named))
-        {
-            attribute = named;
-            t.Next();
-        }
-
-        double percent;
-        if (t.AcceptWord("full"))
-        {
-            percent = 100;
-        }
-        else
-        {
-            t.ExpectWord("at");
-            percent = t.AcceptWord("full") ? 100 : (double)t.ExpectNumber("Value");
-        }
-
-        t.ExpectEnd();
-
-        if (percent is < 0 or > 100)
-            throw new CommandException("Value must be between 0 and 100");
-        if (programmer.Selection.Count == 0)
-            throw new CommandException("Nothing selected. Select fixtures first, e.g. Fixture 1 Thru 5");
-
-        var affected = 0;
-        foreach (var id in programmer.Selection)
-        {
-            if (show.Patch.Find(id) is { } fixture && fixture.Type.Supports(attribute))
-            {
-                programmer.Set(id, attribute, percent / 100);
-                affected++;
-            }
-        }
-
-        if (affected == 0)
-            throw new CommandException($"The selected fixtures have no {attribute} attribute");
-
-        return CommandResult.Ok(
-            $"Fixture {SelectionFormatter.Format(programmer.Selection)}: {attribute} {percent.ToString("0.##", CultureInfo.InvariantCulture)} %");
-    }
 
     // ---- record / update / delete / label --------------------------------------------------------------------
 
@@ -359,6 +336,9 @@ public sealed class CommandInterpreter(Show show, Programmer programmer)
                 if (!show.Cuelists.Remove((int)target.Number))
                     throw new CommandException($"Cuelist {target.Number} does not exist");
                 break;
+            case "universe":
+                DeleteUniverse((int)target.Number);
+                break;
         }
 
         return CommandResult.Ok($"Deleted {Describe(target)}");
@@ -384,6 +364,9 @@ public sealed class CommandInterpreter(Show show, Programmer programmer)
                 break;
             case "fixture":
                 (show.Patch.Find(number) ?? throw new CommandException($"Fixture {number} is not patched")).Label = text;
+                break;
+            case "universe":
+                (show.Universes.GetValueOrDefault(number) ?? throw new CommandException($"Universe {number} does not exist")).Label = text;
                 break;
         }
 
@@ -454,74 +437,6 @@ public sealed class CommandInterpreter(Show show, Programmer programmer)
         return show.Cuelists.GetValueOrDefault(number) ?? throw new CommandException($"Cuelist {number} does not exist");
     }
 
-    // ---- patch -----------------------------------------------------------------------------------------------
-
-    private CommandResult PatchFixtures(TokenStream t)
-    {
-        t.ExpectWord("fixture");
-        var (from, to) = ParseRange(t);
-        t.ExpectWord("type");
-
-        var typeName = t.ExpectWordValue("Fixture type");
-        var type = FixtureTypeLibrary.Find(typeName)
-            ?? throw new CommandException($"Unknown fixture type '{typeName}'. Available: {string.Join(", ", FixtureTypeLibrary.All.Select(x => x.Name))}");
-
-        t.ExpectWord("at");
-        var (universe, address) = ParseAddress(t.ExpectNumberText("Address"));
-        t.ExpectEnd();
-
-        if (to - from + 1 > MaxPatchRange)
-            throw new CommandException($"Patch at most {MaxPatchRange} fixtures at once");
-
-        var fixtures = new List<Fixture>();
-        for (var id = from; id <= to; id++)
-        {
-            if (address + type.Footprint - 1 > 512)
-            {
-                universe++;
-                address = 1;
-            }
-
-            if (universe > ArtNetPacket.MaxUniverse)
-                throw new CommandException("Not enough universes for this patch");
-
-            fixtures.Add(new Fixture(id, type, universe, address));
-            address += type.Footprint;
-        }
-
-        foreach (var fixture in fixtures)
-            show.Patch.Add(fixture);
-
-        var first = fixtures[0];
-        var last = fixtures[^1];
-        return CommandResult.Ok(
-            $"Patched Fixture {from} Thru {to} as {type.Name}: {first.Universe}.{first.Address} to {last.Universe}.{last.Address + type.Footprint - 1}");
-    }
-
-    /// <summary>Accepts <c>universe.address</c> (1.15) or a single absolute address (513 = universe 2, address 1).</summary>
-    private static (int Universe, int Address) ParseAddress(string text)
-    {
-        var parts = text.Split('.');
-        var universe = 1;
-        var address = 0;
-
-        if (parts.Length == 2)
-        {
-            if (!int.TryParse(parts[0], out universe) || !int.TryParse(parts[1], out address))
-                throw new CommandException($"'{text}' is not a valid address");
-        }
-        else if (int.TryParse(text, out var absolute) && absolute >= 1)
-        {
-            universe = (absolute - 1) / 512 + 1;
-            address = (absolute - 1) % 512 + 1;
-        }
-
-        if (universe < 1 || universe > ArtNetPacket.MaxUniverse || address < 1 || address > 512)
-            throw new CommandException($"'{text}' is not a valid address. Use universe.address, e.g. 1.15");
-
-        return (universe, address);
-    }
-
     // ---- clear -----------------------------------------------------------------------------------------------
 
     /// <summary>
@@ -570,11 +485,11 @@ public sealed class CommandInterpreter(Show show, Programmer programmer)
                 var cuelist = t.AcceptWord("cuelist") ? t.ExpectInteger("Cuelist number") : 1;
                 return new Target("cue", number, cuelist);
             }
-            case "group" or "cuelist" or "fixture":
+            case "group" or "cuelist" or "fixture" or "universe":
                 t.Next();
                 return new Target(kind, t.ExpectInteger($"{kind} number"), 1);
             default:
-                throw new CommandException("Cue, Group, Cuelist or Fixture expected");
+                throw new CommandException("Cue, Group, Cuelist, Fixture or Universe expected");
         }
     }
 

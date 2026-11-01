@@ -4,7 +4,7 @@
 
 # NX-DMX
 
-**Lichtpult-Software für Windows mit Art-Net-Ausgabe, bedient über eine Befehlszeile wie bei grandMA und ONYX.**
+**Lichtpult-Software für Windows mit Art-Net-Ausgabe: bedient mit Klicks und Befehlszeile wie bei ONYX und grandMA, ferngesteuert über Bitfocus Companion und Stream Deck.**
 
 [![CI](https://github.com/nexoGroups/NX-DMX/actions/workflows/ci.yml/badge.svg)](https://github.com/nexoGroups/NX-DMX/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/nexoGroups/NX-DMX?color=28c77d)](https://github.com/nexoGroups/NX-DMX/releases/latest)
@@ -12,12 +12,13 @@
 ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)
 
 [**Download**](https://github.com/nexoGroups/NX-DMX/releases/latest/download/NxDmx-win-Setup.exe) ·
-[Schnellstart](#schnellstart) ·
+[Oberfläche](#die-oberfläche) ·
 [Befehle](#befehle) ·
-[Art-Net einrichten](#art-net-einrichten) ·
+[Companion](#fernsteuerung-companion-stream-deck-osc) ·
+[Art-Net](#art-net-einrichten) ·
 [Roadmap](#roadmap)
 
-<img src="docs/images/overview.png" alt="NX-DMX: Fixtures, Cuelist, Gruppen, DMX-Monitor, Befehlszeile und Tastenfeld" width="900">
+<img src="docs/images/overview.png" alt="NX-DMX: Fixture-Ansicht mit Farbauswahl, Programmer-Tabelle, Befehlszeile und Tastenfeld" width="900">
 
 </div>
 
@@ -26,9 +27,9 @@
 ## Was ist NX-DMX?
 
 NX-DMX ist ein Lichtpult für Theater und Events, das als Windows-Programm läuft und DMX über **Art-Net** an Nodes im
-Netzwerk schickt. Statt Fader-Rastern wie bei einfachen DMX-Programmen arbeitest du so, wie man es von grandMA und ONYX
-kennt: Du tippst Befehle in eine Befehlszeile (`Fixture 1 Thru 8 At 50 Please`), speicherst mit `Record` und fährst
-Cues mit `Go`. Ein Fehler lässt sich jederzeit mit `Oops` zurücknehmen.
+Netzwerk schickt. Die Oberfläche folgt ONYX und grandMA: schwarz, flach und kantig, Farbe nur dort, wo sie etwas
+bedeutet (Auswahl, Programmer, Wiedergabe, Fehler). Alles, was du anklickst, landet als Befehl in der Befehlszeile und im
+Log, und alles, was du tippen kannst, kannst du auch von einem Stream-Deck-Knopf aus senden.
 
 > **Stand: frühe Version (0.x).** Die Grundlagen funktionieren und sind getestet, aber es fehlt noch einiges, unter
 > anderem Fades und Executor-Fader (siehe [Roadmap](#roadmap)). Die Art-Net-Ausgabe
@@ -37,18 +38,25 @@ Cues mit `Go`. Ein Fehler lässt sich jederzeit mit `Oops` zurücknehmen.
 
 ### Was schon geht
 
-- **Art-Net 4** (ArtDmx, UDP Port 6454) mit 40 Hz, beliebig viele Universen, wahlweise Broadcast, Unicast an einen Node
-  und Auswahl des Netzwerkadapters
-- **Befehlszeile und Tastenfeld** im Stil von grandMA2 und ONYX: `Fixture`, `Group`, `At`, `Thru`, `+`, `-`, `Full`,
-  `Record`, `Update`, `Delete`, `Label`, `Go`, `Back`, `Goto`, `Off`, `Patch`
-- **`Please`** zum Ausführen (am Zeilenende optional) und **`Oops`** zum Rückgängigmachen, mehrfach hintereinander
-- **Programmer** mit stufenweisem `Clear` und `ClearAll`
-- **Cuelists mit Tracking**, Cue-Nummern mit Nachkommastellen (`Cue 1.5`), mehrere Cuelists gleichzeitig
-- **Gruppen**, Fixture-Typen `Dimmer`, `RGB`, `RGBW`, `RGBDim` und `Mover` (Pan/Tilt in 16 Bit)
-- **Mischen wie auf dem Pult:** Helligkeit nach HTP, alle anderen Werte nach LTP, der Programmer liegt obenauf
-- **Live-Ansicht** von Fixtures, Cuelist, Gruppen, Befehls-Log und dem DMX-Wert jedes Kanals
+- **Linke Seitenleiste** mit allen Bereichen: Fixtures, Groups, Cuelists, Patch, Fixture Manager, Universes, Output,
+  Remote, Show
+- **Fixture-Ansicht** wie bei ONYX: jede gepatchte Fixture als Kachel mit Nummer, Name, Farbe, Pegel und Adresse. Klick
+  wählt aus, `Strg`+Klick fügt hinzu oder nimmt weg, `Umschalt`+Klick wählt einen Bereich
+- **Direkt klickbare Parameter:** Intensität, Position (Pan/Tilt-Feld), Farbe (Farbfelder und Regler), Beam und Control.
+  Jeder Klick wird zum Befehl in der Befehlszeile und läuft sofort
+- **Patch-Fenster:** Fixtures aus einem Profil in ein Universum auf eine Startadresse legen, verschieben, umbenennen, auf
+  ein anderes Profil umstellen, löschen. Dazu eine Adresskarte aller Universen, Überschneidungen werden abgelehnt
+- **Fixture Manager:** eigene Fixture-Profile mit Kanalanzahl, Belegung jedes Kanals, 16-Bit-Feinkanal, Standardwert und
+  benannten **Funktionen mit DMX-Bereichen** (zum Beispiel „Gobo 3 = 24–31“). Import und Export als `.nxfixture`
+- **Mehrere Universen**, jedes mit eigenem Namen, Ein/Aus und eigenem Ziel: Broadcast oder Unicast an einen Node
+- **Befehlszeile und Tastenfeld** im Stil von grandMA2 und ONYX mit `Please` und `Oops`
+- **Programmer-Tabelle** (rot = im Programmer gesetzt), Befehls-Log, Hilfe
+- **Cuelists mit Tracking**, mehrere gleichzeitig, mit Go, Back, Off und Toggle je Cuelist
+- **Master und Blackout** immer sichtbar in der Kopfzeile
+- **Fernsteuerung** per HTTP, OSC und Textport für Bitfocus Companion und Stream Deck
+- **Art-Net 4** (ArtDmx, UDP Port 6454) mit 40 Hz, bis zu 32768 Universen
 - **Shows speichern und laden** (`.nxshow`), dazu eine automatische Sicherung nach jeder Änderung
-- **Automatische Updates:** Eine neue Version erscheint als grüner Button in der Kopfzeile (siehe [Updates](#updates))
+- **Automatische Updates:** Eine neue Version erscheint als grüner Button links unten (siehe [Updates](#updates))
 
 ## Installation
 
@@ -66,33 +74,61 @@ Release-Dateien entstehen vollautomatisch in [GitHub Actions](.github/workflows/
 
 Voraussetzung: Windows 10 oder 11, 64 Bit.
 
+## Die Oberfläche
+
+Links wählst du den Bereich (`Strg+1` bis `Strg+9`), unten stehen immer Programmer-Tabelle bzw. Log, die Befehlszeile
+und das Tastenfeld. Oben rechts siehst du Master, Blackout und den Zustand der Art-Net-Ausgabe.
+
+| Bereich | Wofür |
+|---|---|
+| **Fixtures** | Fixtures auswählen und ihre Parameter direkt klicken: Intensität, Position, Farbe, Beam, Control |
+| **Groups** | Gruppen als Kacheln: Klick wählt aus, **Record**, **Label** und **Delete** wirken auf eine angeklickte Gruppe |
+| **Cuelists** | Cuelists als Playback-Karten mit **GO / BACK / OFF / TOGGLE**, darunter die Cues. Klick auf einen Cue springt dorthin |
+| **Patch** | Fixtures hinzufügen, verschieben, umbenennen, löschen. Adresskarte aller Universen |
+| **Fixture Manager** | Fixture-Profile bearbeiten: Kanäle, Attribute, 16 Bit, Standardwerte, Funktionen mit DMX-Bereichen |
+| **Universes** | Universen anlegen und einzeln einstellen (Name, Ein/Aus, Broadcast oder Node-IP). Live-Anzeige der 512 Kanäle |
+| **Output** | Netzwerkadapter, Standardziel, Senderate und was wohin gesendet wird |
+| **Remote** | HTTP, OSC und Textport für Companion und Stream Deck |
+| **Show** | Neu, Öffnen, Speichern, Sicherung |
+
+<div align="center">
+<img src="docs/images/patch.png" alt="Patch-Fenster mit Fixture-Liste, Formular und Adresskarte" width="900">
+</div>
+
+### Klicken ist Tippen
+
+Wie bei ONYX wird jede Bedienung zu einem Befehl in der Befehlszeile. Ein Klick auf `Fixture 5`, auf ein Farbfeld oder
+auf eine Funktion des Gobo-Rads schreibt `Fixture 5`, `Color Red` oder `Gobo Function "Gobo 2"` in die Zeile und führt
+sie aus. Der Befehl steht im Log und lässt sich mit `Oops` zurücknehmen.
+
+- Nach **Record**, **Update**, **Delete** oder **Label** vervollständigt der nächste Klick auf eine Gruppe, einen Cue
+  oder eine Cuelist den Befehl und führt ihn aus (bei **Label** tippst du danach den Namen in Anführungszeichen).
+- Steht schon etwas in der Befehlszeile, hängt ein Klick seinen Befehl nur an. Mit **Please** schickst du ihn ab.
+- Tippen funktioniert überall: Buchstaben, die du eingibst, landen in der Befehlszeile, auch nach einem Klick.
+
 ## Schnellstart
 
-Beim allerersten Start ist ein Demo-Rig gepatcht (8 RGB-Dimmer-Fixtures, 4 Mover, 4 Dimmer in Universum 1). Danach
-startet NX-DMX immer mit der Show der letzten Sitzung. Alle Befehle schreibst
-du in die Zeile `NX>` unten und bestätigst mit **Enter** oder der **Please**-Taste. Die Tasten darunter tippen dieselben
-Wörter für dich ein.
+Beim allerersten Start ist ein Demo-Rig gepatcht (8 RGB-Dimmer-Fixtures, 4 Moving Heads, 4 Dimmer, zwei Gruppen).
+Danach startet NX-DMX immer mit der Show der letzten Sitzung.
+
+1. In **Fixtures** auf die Gruppe **Wash** klicken. Im Bereich **COLOR** auf **Warm White** und im Bereich **INTENSITY**
+   auf **80** klicken.
+2. In **Cuelists** auf **Record Cue** klicken, dann **GO** drücken.
+3. Mit **Oops** den letzten Schritt zurücknehmen.
+
+Dasselbe als Befehle in die Zeile `NX>` getippt:
 
 ```text
-NX> Fixture 1 Thru 8 At 100        Fixtures 1 bis 8 auswählen und auf 100 % setzen
-NX> Red At 100                     Rot auf 100 %
-NX> Green At 55                    Grün auf 55 %  (ergibt zusammen ein warmes Licht)
-NX> Record Cue 1 "Warm Wash"       Alles, was im Programmer steht, als Cue 1 speichern
-NX> Record Group 1 "Front"         Die Auswahl als Gruppe 1 speichern
+NX> Group 1                        Gruppe 1 auswählen
+NX> Color "Warm White"             Warmweiß auf alle Farb-Emitter
+NX> At 80                          Intensität 80 %
+NX> Record Cue 1 "Warm Wash"       Alles aus dem Programmer als Cue 1 speichern
 NX> ClearAll                       Programmer leeren
-NX> Group 1                        Gruppe 1 wieder auswählen
-NX> Blue At 100                    Fixtures 1 bis 8 blau machen
-NX> Record Cue 2 "Blue Night"      Als Cue 2 speichern
-NX> Go                             Cue 1 starten, noch einmal Go startet Cue 2
+NX> Go                             Cue 1 starten
 NX> Oops                           Den letzten Programmierschritt zurücknehmen
 ```
 
-Das Ergebnis siehst du sofort im Fixtures-Panel und im DMX-Monitor rechts unten. Mit `Help` listet die Software alle
-Befehle auf.
-
-<div align="center">
-<img src="docs/images/keypad.png" alt="Befehlszeile und Tastenfeld" width="900">
-</div>
+Mit `Help` (oder dem Reiter HELP unten) listet die Software alle Befehle auf.
 
 ## Befehle
 
@@ -101,81 +137,157 @@ Befehle auf.
 | `Fixture 1 Thru 10` | Fixtures 1 bis 10 auswählen |
 | `Fixture 1 + 5 + 7 Thru 9 - 8` | Mit `+` hinzufügen und mit `-` entfernen |
 | `Group 2` | Gruppe 2 auswählen |
-| `At 50` oder `At Full` oder `Full` | Helligkeit der Auswahl in Prozent |
-| `Red At 100`, `Pan At 25` | Einzelne Attribute: `Red`, `Green`, `Blue`, `White`, `Pan`, `Tilt` |
+| `At 50` oder `At Full` oder `Full` | Intensität der Auswahl in Prozent |
+| `Red At 100`, `Pan At 25 Tilt At 70` | Einzelne Attribute, auch mehrere hintereinander |
+| `Gobo Function "Gobo 2"` | Eine benannte Funktion des Kanals (aus dem Fixture-Profil) |
+| `Color Red`, `Color "Warm White"` | Alle Farb-Emitter der Auswahl: RGB, Weiß, Amber, CMY und Farbrad |
 | `Record Cue 1 "Name"` | Programmer als Cue speichern, optional mit `Cuelist 2` |
 | `Record Group 3 "Name"` | Auswahl als Gruppe speichern |
 | `Update Cue 1` | Den Programmer in einen bestehenden Cue einfügen |
 | `Delete Cue 1`, `Delete Group 3`, `Delete Cuelist 2` | Löschen |
-| `Delete Fixture 1 Thru 5` | Fixtures aus dem Patch entfernen |
-| `Label Group 3 "Front"` | Umbenennen (auch `Cue` und `Fixture`) |
-| `Go`, `Go -`, `Back`, `Goto Cue 5`, `Off` | Playback, mit `Cuelist 2` hinten für eine andere Cuelist |
-| `Patch Fixture 1 Thru 8 Type RGBDim At 1.1` | Fixtures anlegen: Typ und Adresse als `Universum.Adresse` |
+| `Delete Fixture 1 Thru 5`, `Delete Universe 3` | Aus dem Patch entfernen (ein Universum nur, wenn es leer ist) |
+| `Label Group 3 "Front"` | Umbenennen (auch `Cue`, `Cuelist`, `Fixture` und `Universe`) |
+| `Go`, `Go -`, `Back`, `Goto Cue 5`, `Off`, `Toggle` | Playback, mit `Cuelist 2` hinten für eine andere Cuelist |
+| `Blackout`, `Blackout On`, `Blackout Off` | Alle Intensitäten aus (ohne `On`/`Off` wechselt es) |
+| `Master At 80` | Grand Master in Prozent |
+| `Patch Fixture 1 Thru 8 Type RGBDim At 1.1` | Fixtures anlegen: Profil und Adresse als `Universum.Adresse` |
+| `Patch Fixture 5 At 2.1` | Vorhandene Fixture verschieben (ohne `Type`) |
+| `Patch Fixture 5 Type RGB` | Profil einer vorhandenen Fixture ändern (ohne `At`) |
+| `Universe 2 Label "FOH" Unicast 10.0.0.5 On` | Universum anlegen oder ändern. `Broadcast` und `Off` gibt es auch |
 | `Clear` | Schrittweise zurück: erst Auswahl, dann Programmer |
 | `ClearAll` | Auswahl und Programmer auf einmal leeren |
 | `Oops` | Letzten Programmierschritt zurücknehmen, bis zu 100 Mal |
 | `Please` | Führt die Zeile aus. Am Zeilenende optional, wie bei der grandMA |
 | `Help` | Zeigt die Befehlsübersicht |
 
-**Fixture-Typen:** `Dimmer` (1 Kanal), `RGB` (3), `RGBW` (4), `RGBDim` (4, mit Dimmer-Kanal) und `Mover` (8, Pan/Tilt in
-16 Bit, Dimmer, RGB). RGB-Fixtures ohne eigenen Dimmer bekommen einen virtuellen Dimmer, der die Farben skaliert.
+Mehrere Befehle lassen sich mit `;` hintereinander setzen, zum Beispiel `Group 2; Color Blue; At 80`. Sie laufen der
+Reihe nach und halten beim ersten Fehler an.
 
-**Oops und Playback:** `Oops` macht alle Programmierschritte rückgängig (Auswahl, Werte, Record, Delete, Label, Patch).
-`Go`, `Back`, `Goto` und `Off` gehören nicht dazu, wie bei der grandMA. Ein fehlgeschlagener Befehl hinterlässt nichts
-Halbfertiges.
+**Profile:** `Dimmer` (1 Kanal), `RGB` (3), `RGBW` (4), `RGBDim` (4, mit Dimmer-Kanal), `Mover` (8, Pan/Tilt in 16 Bit,
+Dimmer, RGB) und `Spot Mover` (15: Pan/Tilt 16 Bit, Dimmer, Strobe, Farbrad, Gobo, Prisma, Fokus, Zoom und mehr mit
+benannten Funktionen) sind eingebaut, eigene baust du im Fixture Manager. RGB-Fixtures ohne eigenen Dimmer bekommen einen
+virtuellen Dimmer, der die Farben skaliert.
+
+**Oops und Playback:** `Oops` macht alle Programmierschritte rückgängig (Auswahl, Werte, Record, Delete, Label, Patch,
+Universen, Fixture-Profile). `Go`, `Back`, `Goto`, `Off`, `Toggle`, `Blackout` und `Master` gehören nicht dazu, wie bei der
+grandMA. Ein fehlgeschlagener Befehl hinterlässt nichts Halbfertiges.
+
+## Fixtures patchen
+
+Im Bereich **Patch** wählst du ein Profil, die Anzahl, die erste Fixture-Nummer, das Universum und die Startadresse. Bei
+**Next free address** sucht NX-DMX die erste freie Stelle im Universum. Ein Klick auf die Adresskarte übernimmt Universum
+und Kanal. Hinter dem Knopf steckt ein normaler Befehl, zum Beispiel
+`Patch Fixture 1 Thru 8 Type RGBDim At 1.1 Label "Wash"`.
+
+- Füllt sich ein Universum, geht es im nächsten weiter.
+- **Überschneidungen werden abgelehnt**, mit dem Hinweis, welche Fixture im Weg ist.
+- In der Liste ausgewählte Fixtures kannst du verschieben, auf ein anderes Profil umstellen, umbenennen und löschen.
+
+## Fixture Manager
+
+Der Bereich **Profiles** ist ein eigener Editor für Fixture-Profile:
+
+- **DMX Channels:** wie viele Kanäle die Fixture belegt (auch ungenutzte).
+- Pro Kanal das **Attribut** (Dimmer, Rot, Grün, Blau, Weiß, Amber, UV, CMY, Farbrad, Pan, Tilt, Zoom, Fokus, Iris, Frost,
+  Prisma, Gobo, Gobo-Rotation, Strobe, Speed, Control, Custom), optional ein **16-Bit-Feinkanal** und der **Standardwert**.
+- Pro Kanal **Funktionen mit DMX-Bereichen** von 0 bis 255, etwa „Open 0–7“, „Gobo 1 8–15“. In der Fixture-Ansicht wird
+  jede Funktion zu einem Knopf.
+- Eingebaute Profile sind schreibgeschützt: mit **Copy** machst du eine bearbeitbare Kopie. Ungültige Eingaben (doppelte
+  Kanäle, überlappende Bereiche, Zahlen außerhalb von 0–255) werden live gemeldet und lassen sich nicht speichern.
+- Profile liegen in der Show und reisen mit ihr. Mit **Export** und **Import** teilst du sie als `.nxfixture`-Datei.
+- Ändert man ein Profil, folgen alle gepatchten Fixtures davon sofort. Passt es dann nicht mehr ins Universum, wird die
+  Änderung abgelehnt.
+
+<div align="center">
+<img src="docs/images/profiles.png" alt="Fixture Manager mit Kanaltabelle und Funktionen" width="900">
+</div>
+
+## Universen
+
+Im Bereich **Universes** legst du beliebig viele Universen an. Jedes hat seine eigenen Einstellungen:
+
+| Einstellung | Bedeutung |
+|---|---|
+| **Name** | Zum Beispiel „Bühne“ oder „Dimmerrack“ |
+| **Output on** | Schaltet nur dieses Universum ab, die anderen laufen weiter |
+| **Broadcast** | Das Universum geht an das Standardziel aus dem Bereich Output |
+| **Unicast** | Das Universum geht direkt an einen Node (IPv4-Adresse) |
+
+Universen entstehen auch automatisch, wenn du eine Fixture hineinpatchst. Ein Universum mit gepatchten Fixtures lässt sich
+nicht löschen. Darunter zeigt die Live-Anzeige alle 512 Kanäle des ausgewählten Universums.
+
+<div align="center">
+<img src="docs/images/universes.png" alt="Universen mit Ziel-Einstellung und DMX-Monitor" width="900">
+</div>
+
+## Fernsteuerung: Companion, Stream Deck, OSC
+
+NX-DMX lässt sich vollständig von **Bitfocus Companion** und damit von jedem Stream Deck bedienen. Weil jede Anfrage ein
+normaler Konsolenbefehl ist, kannst du alles auf einen Knopf legen, was du tippen kannst. Im Bereich **Remote** schaltest
+du die Schnittstellen ein und findest fertige Beispiele zum Kopieren.
+
+| Schnittstelle | Standard | Verwendung |
+|---|---|---|
+| **HTTP** | Port 8765 | Companion-Modul „Generic: HTTP Requests“, z. B. `GET /api/go/1` |
+| **OSC (UDP)** | Port 8000 | Companion-Modul „Generic: OSC“, z. B. `/nxdmx/go 1` |
+| **Text (TCP und UDP)** | Port 7000 | „Generic: TCP/UDP“: eine Zeile pro Befehl, Antwort `OK …` oder `ERR …` |
+
+Standardmäßig hören alle Schnittstellen nur auf **diesem Computer**. Soll Companion auf einem anderen Rechner laufen, schaltest
+du **Allow other computers** ein. HTTP kann zusätzlich mit einem Token geschützt werden, und Anfragen von Webseiten im
+Browser lehnt NX-DMX ab. Eine Schritt-für-Schritt-Anleitung mit Beispielknöpfen steht in
+[docs/companion.md](docs/companion.md).
 
 ## Shows speichern und laden
 
-Ein Show besteht aus dem Patch, den Gruppen und den Cuelists mit allen Cues. Die Zeile **SHOW** in der Kopfzeile zeigt
-den Namen, und ein oranges **● unsaved** erscheint, solange es ungespeicherte Änderungen gibt.
+Eine Show besteht aus den Universen, den eigenen Fixture-Profilen, dem Patch, den Gruppen und den Cuelists mit allen Cues.
+Der Bereich **Show** und die Kopfzeile zeigen den Namen, und ein oranges **●** erscheint, solange es ungespeicherte
+Änderungen gibt.
 
 | Taste | Tastenkürzel | Wirkung |
 |---|---|---|
-| **New** | `Strg+N` | Leere Show ohne Patch anlegen |
+| **New** | `Strg+N` | Leere Show anlegen |
 | **Open** | `Strg+O` | Eine `.nxshow`-Datei öffnen |
 | **Save** | `Strg+S` | Speichern, beim ersten Mal mit Namensabfrage |
 | **Save as** | `Strg+Umschalt+S` | Unter neuem Namen speichern |
 
 - Die Dateien liegen standardmäßig in `Dokumente\NX-DMX Shows` und sind lesbares JSON. Sie lassen sich kopieren, sichern
-  und auf einen anderen Rechner mitnehmen.
+  und auf einen anderen Rechner mitnehmen. Dateien im alten Format (aus 0.2) lassen sich weiter öffnen.
 - **Automatische Sicherung:** Nach jeder Änderung schreibt NX-DMX die aktuelle Show nach `%AppData%\NX-DMX`. Nach einem
   Absturz, einem Stromausfall oder einem Update-Neustart ist sie beim nächsten Start wieder da.
 - Vor **New**, **Open** und dem Schließen fragt NX-DMX nach, wenn es ungespeicherte Änderungen gibt.
-- Nicht gespeichert werden der Programmer, die Auswahl und die aktuelle Cue-Position der Cuelists. Nach dem Laden ist
-  alles aus.
+- Nicht gespeichert werden der Programmer, die Auswahl, die Cue-Position der Cuelists, Blackout, Master und die
+  Netzwerkeinstellungen dieses Computers. Nach dem Laden ist alles aus.
 - Eine kaputte oder zu neue Datei wird mit einer Meldung abgelehnt und lässt die aktuelle Show unverändert.
+- Unerwartete Fehler zeigen eine Meldung, schreiben `error.log` in den Datenordner und lassen das Pult weiterlaufen.
 
 ## Art-Net einrichten
 
-Oben links in der Kopfzeile stellst du die Ausgabe ein:
+Im Bereich **Output** stellst du die Ausgabe ein:
 
 | Feld | Bedeutung |
 |---|---|
-| **Art-Net target** | Standard ist der Broadcast `255.255.255.255`. Für einen einzelnen Node trägst du dessen IP ein (Unicast). |
-| **Local IP (optional)** | Hast du mehrere Netzwerkadapter (WLAN, LAN, VPN), trage hier die IP des Adapters ein, an dem die Nodes hängen. Sonst schickt Windows den Broadcast über irgendeinen davon. |
-| **Output enabled** | Schaltet die Ausgabe ab, ohne die Programmierung zu verlieren. |
+| **Send DMX** | Schaltet die gesamte Ausgabe ab, ohne die Programmierung zu verlieren |
+| **Network adapter** | Hast du mehrere Netzwerkadapter (WLAN, LAN, VPN), wähle den, an dem die Nodes hängen. Sonst schickt Windows den Broadcast über irgendeinen davon. |
+| **Default destination** | Standard ist der Broadcast `255.255.255.255`. Für alle Universen, die auf **Broadcast** stehen. Knöpfe für `2.255.255.255`, `10.255.255.255` und den Broadcast des gewählten Adapters |
 
-Mit **Apply** oder Enter übernimmst du die Einstellung. Rechts in der Kopfzeile steht die tatsächliche Senderate und
-die Liste der Universen, die gerade gesendet werden.
+Mit **Apply** übernimmst du die Einstellung. In der Kopfzeile stehen die tatsächliche Senderate und die Zahl der Universen.
+Einzelne Universen können in **Universes** an eine feste Node-IP gehen, unabhängig vom Standardziel. Fällt ein Node aus,
+laufen die übrigen Universen weiter.
 
 - Dein PC und der Node müssen im selben Netz liegen, bei Art-Net meist `2.x.x.x` (255.0.0.0) oder `10.x.x.x`.
 - NX-DMX zählt Universen **ab 1**. **Universum 1 wird als Port-Address 0** im Paket gesendet, also Net 0, Sub-Net 0,
   Universum 0. Die meisten Nodes zählen ab 0, dann stellst du den Ausgang des Nodes auf 0.
-- Gesendet werden alle gepatchten Universen mit **40 Hz**. Das Art-Net-Maximum liegt bei 44 Hz.
+- Gesendet werden alle angelegten Universen mit **40 Hz**. Das Art-Net-Maximum liegt bei 44 Hz.
 
 ## Updates
 
-NX-DMX prüft beim Start im Hintergrund, ob es auf GitHub ein neueres Release gibt. Wenn ja, erscheint oben rechts ein
-grüner Button **Update to x.y.z**. Ein Klick lädt die neue Version herunter und fragt, ob jetzt neu gestartet werden
+NX-DMX prüft beim Start im Hintergrund, ob es auf GitHub ein neueres Release gibt. Wenn ja, erscheint links unten ein
+grüner Button **Update x.y.z**. Ein Klick lädt die neue Version herunter und fragt, ob jetzt neu gestartet werden
 soll oder erst beim nächsten Beenden.
-
-<div align="center">
-<img src="docs/images/update.png" alt="Der grüne Update-Button in der Kopfzeile" width="560">
-</div>
 
 - Das Pult **startet niemals von allein neu**, weil gerade eine Show laufen könnte.
 - Ohne Internet passiert nichts, und es gibt keine Fehlermeldung.
-- Mit einem Klick auf die Versionsnummer (`v0.1.0`) neben dem Status suchst du von Hand nach Updates.
+- Mit einem Klick auf die Versionsnummer (`v0.3.0`) links unten suchst du von Hand nach Updates.
 - Updates funktionieren in der **installierten** Version. Eine aus dem Quellcode gestartete Version meldet das im Log.
 - Deine Show bleibt beim Neustart erhalten, weil sie automatisch gesichert wird (siehe [Shows speichern](#shows-speichern-und-laden)).
   Der Programmer und die Cuelist-Positionen starten danach leer. Der Dialog weist darauf hin.
@@ -197,32 +309,37 @@ dotnet test                            # Tests ausführen
 
 Hinweis: Eine frisch installierte .NET-SDK kennt ein bereits offenes Terminal noch nicht. Öffne es dann neu.
 
+Mit der Umgebungsvariable `NXDMX_DATA` legst du einen anderen Datenordner für Sicherung und Einstellungen fest, etwa zum
+Ausprobieren, ohne die eigene Show anzufassen.
+
 ## Projektaufbau
 
 | Ordner | Inhalt |
 |---|---|
-| `src/NxDmx.Core` | Alles ohne Oberfläche: Art-Net, Fixtures und Patch, Programmer, Cuelists, Befehlsinterpreter, Renderer, Ausgabe-Engine |
-| `src/NxDmx.App` | WPF-Oberfläche: Befehlszeile, Tastenfeld, Fixture-Tabelle, Cuelist, Gruppen, Log, DMX-Monitor, Updater |
-| `tests/NxDmx.Tests` | xUnit-Tests für Art-Net-Pakete, Befehle, Rendering, Oops und Engine |
+| `src/NxDmx.Core` | Alles ohne Oberfläche: Art-Net, Fixtures, Profile und Patch, Universen, Programmer, Cuelists, Befehlsinterpreter, Renderer, Ausgabe-Engine, Fernsteuerung (HTTP, OSC, Text) |
+| `src/NxDmx.App` | WPF-Oberfläche: Theme, Hauptfenster, Ansichten (`Views/`), eigene Steuerelemente (`Controls/`), Dienste (`Services/`) |
+| `tests/NxDmx.Tests` | xUnit-Tests für Art-Net-Pakete, Befehle, Patch, Profile, Universen, Rendering, Oops, Showdateien, Engine und Fernsteuerung |
 | `tools/` | Skripte für Icon, Screenshots, das Paketieren eines Releases und den Update-Test |
+| `docs/` | Companion-Anleitung, Bilder, Release-Notizen |
 | `.claude/skills/release` | Anleitung für Claude Code, wie eine neue Version veröffentlicht wird |
 
-So läuft ein Frame (40 Hz): `Programmer` und aktive `Cuelist`s → `FrameRenderer` → `DmxFrame` → `ArtNetOutput`
-(ArtDmx per UDP). Die Cues arbeiten mit Tracking: Der Ausgang entsteht aus allen Cues bis zum aktuellen, der Reihe nach
-angewendet.
+So läuft ein Frame (40 Hz): `Programmer` und aktive `Cuelist`s → `FrameRenderer` (mit Master und Blackout) → `DmxFrame` →
+`ArtNetOutput` (ArtDmx per UDP, pro Universum an Broadcast oder Node). Die Cues arbeiten mit Tracking: Der Ausgang entsteht
+aus allen Cues bis zum aktuellen, der Reihe nach angewendet. Jede Bedienung, auch Klicks und Fernsteuerung, läuft durch
+denselben `CommandInterpreter`.
 
 ## Ein Release veröffentlichen
 
 Für Maintainer: Version im Tag festlegen und pushen. Den Rest erledigt [GitHub Actions](.github/workflows/release.yml).
 
 ```powershell
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 Der Workflow führt die Tests aus, baut die selbstständige Windows-Version, erzeugt mit Velopack den Installer, das
 Update-Paket und den Update-Feed und veröffentlicht alles als GitHub-Release. Danach sehen installierte Programme das
-Update. Lokal erzeugt `tools/pack.ps1 -Version 0.2.0` dieselben Dateien im Ordner `Releases/`. Dazu brauchst du das
+Update. Lokal erzeugt `tools/pack.ps1 -Version 0.3.0` dieselben Dateien im Ordner `Releases/`. Dazu brauchst du das
 Velopack-Werkzeug in der passenden Version: `dotnet tool install -g vpk --version 1.2.161`.
 
 Zum Testen eines Updates vor der Veröffentlichung kannst du die Umgebungsvariable `NXDMX_UPDATE_SOURCE` auf einen
@@ -232,10 +349,12 @@ Ordner (oder eine URL) mit den Release-Dateien setzen, dann sucht die installier
 
 - [ ] Fade- und Delay-Zeiten
 - [x] Shows speichern und laden, automatische Sicherung
-- [ ] Presets (Color, Position, Beam)
+- [x] Patch-Fenster, Fixture-Manager, mehrere Universen
+- [x] Fernsteuerung für Companion, Stream Deck und OSC
+- [ ] Presets (Color, Position, Beam) als eigene Objekte
 - [ ] Executor-Fader und Seiten
 - [ ] Copy und Move, Highlight und Locate
-- [ ] Patch-Editor und Fixture-Bibliothek
+- [ ] GDTF-Import
 - [ ] Effekte
 - [ ] Art-Net-Node-Erkennung (ArtPoll), sACN
 - [ ] Signierter Installer

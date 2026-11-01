@@ -1,6 +1,8 @@
-# Starts the app, programs a small demo show through the real keypad and saves the screenshots used in the README.
+# Starts the app with its own data folder, programs a small demo show through the real command line and saves the
+# screenshots used in the README (docs/images).
 #   powershell -File tools/screenshots.ps1 -Exe src\NxDmx.App\bin\Debug\net10.0-windows\NX-DMX.exe
-# The Art-Net target is switched to loopback first, so nothing reaches a real node on the network.
+# Art-Net goes to loopback and the remote servers use other ports, so nothing reaches the network and a running copy of
+# NX-DMX is left alone. The window must stay in front while this runs.
 param(
     [Parameter(Mandatory)] [string]$Exe,
     [string]$OutDir
@@ -17,12 +19,17 @@ public static class Win {
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
+    [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int hgt, bool repaint);
 }
 "@
 [void][Win]::SetProcessDPIAware()
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $OutDir = (Resolve-Path $OutDir).Path
 
+$AE = [System.Windows.Automation.AutomationElement]
+function Find-ById($root, $id) {
+    $root.FindFirst('Descendants', (New-Object System.Windows.Automation.PropertyCondition($AE::AutomationIdProperty, $id)))
+}
 function Save-Window($handle, $path) {
     $r = New-Object Win+RECT
     [void][Win]::GetWindowRect($handle, [ref]$r)
@@ -33,90 +40,75 @@ function Save-Window($handle, $path) {
     $g.ReleaseHdc($hdc)
     $g.Dispose()
     $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
-    return $bmp
+    $bmp.Dispose()
 }
-
-function Save-Crop($bmp, $x, $y, $w, $h, $path) {
-    $crop = $bmp.Clone((New-Object System.Drawing.Rectangle $x, $y, $w, $h), $bmp.PixelFormat)
-    $crop.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
-    $crop.Dispose()
+function Press($root, $id) {
+    $el = Find-ById $root $id
+    if (-not $el) { throw "Element $id not found" }
+    try { $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
+    catch {
+        try { $el.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select() }
+        catch { $el.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle() }
+    }
+    Start-Sleep -Milliseconds 450
 }
-
-$AE = [System.Windows.Automation.AutomationElement]
-function Find-ById($root, $id) {
-    $root.FindFirst('Descendants', (New-Object System.Windows.Automation.PropertyCondition($AE::AutomationIdProperty, $id)))
-}
-function Find-Button($root, $name) {
-    $c1 = New-Object System.Windows.Automation.PropertyCondition($AE::NameProperty, $name)
-    $c2 = New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
-    $root.FindFirst('Descendants', (New-Object System.Windows.Automation.AndCondition($c1, $c2)))
-}
-function Set-Text($el, $text) { $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($text) }
-function Click($el) { $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
-
-# Types a line and presses Please. WPF runs Invoke asynchronously, so wait until the command line has been emptied by
-# the submit; otherwise the next line can overwrite this one before it was taken.
-function Submit-Line($cmd, $please, $line) {
-    Set-Text $cmd $line
-    Click $please
-    $value = $cmd.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+function Command($root, $line) {
+    $box = (Find-ById $root 'CommandLine').GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+    $box.SetValue($line)
+    Press $root 'PleaseTop'
     $deadline = (Get-Date).AddSeconds(3)
-    while ($value.Current.Value -ne '' -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 20 }
+    while ($box.Current.Value -ne '' -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 20 }
     Start-Sleep -Milliseconds 80
 }
 
+$data = Join-Path ([IO.Path]::GetTempPath()) ('nxdmx-shots-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+New-Item -ItemType Directory -Force $data | Out-Null
+'{ "BroadcastAddress": "127.0.0.1", "HttpPort": 18765, "OscPort": 18000, "TextPort": 17000 }' | Set-Content -Encoding UTF8 (Join-Path $data 'settings.json')
+$env:NXDMX_DATA = $data
+
 # Something has to listen on the Art-Net port, otherwise Windows reports the loopback sends as failed.
 $listener = New-Object System.Net.Sockets.UdpClient (New-Object System.Net.IPEndPoint ([System.Net.IPAddress]::Loopback), 6454)
-$listener.Client.ReceiveBufferSize = 4MB
-$drain = [System.Threading.Tasks.Task]::Run([Action]{
+$null = [System.Threading.Tasks.Task]::Run([Action]{
     $ep = New-Object System.Net.IPEndPoint ([System.Net.IPAddress]::Any), 0
     try { while ($true) { [void]$listener.Receive([ref]$ep) } } catch { }
 })
 
 $proc = Start-Process -FilePath $Exe -PassThru
 try {
-    $deadline = (Get-Date).AddSeconds(20)
-    while ($proc.MainWindowHandle -eq [IntPtr]::Zero -and (Get-Date) -lt $deadline) {
-        Start-Sleep -Milliseconds 200
-        $proc.Refresh()
-    }
+    $deadline = (Get-Date).AddSeconds(25)
+    while ($proc.MainWindowHandle -eq [IntPtr]::Zero -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200; $proc.Refresh() }
     if ($proc.MainWindowHandle -eq [IntPtr]::Zero) { throw 'Main window did not appear' }
+    [void][Win]::MoveWindow($proc.MainWindowHandle, 20, 20, 1520, 940, $true)
+    Start-Sleep -Milliseconds 1800
     $root = $AE::FromHandle($proc.MainWindowHandle)
-    Start-Sleep -Milliseconds 800
 
-    Set-Text (Find-ById $root 'TargetIp') '127.0.0.1'
-    Click (Find-Button $root 'Apply')
-
-    $cmd = Find-ById $root 'CommandLine'
-    $please = Find-Button $root 'Please'
+    # A look to record: warm front wash, blue movers.
     foreach ($line in @(
-            'Fixture 1 Thru 8 At 100', 'Red At 100', 'Green At 55', 'Blue At 5',
+            'Universe 2 Label "Dimmer rack" Unicast 192.168.1.50',
+            'Patch Fixture 31 Thru 34 Type RGBW At 2.1 Label "LED bar"',
+            'Group 1', 'At 80', 'Color "Warm White"',
             'Record Cue 1 "Warm Wash"',
-            'Record Group 1 "Front Wash"',
-            'ClearAll',
-            'Fixture 9 Thru 12 At 100', 'Pan At 35', 'Tilt At 70', 'Red At 0', 'Green At 30', 'Blue At 100',
-            'Record Group 2 "Movers"',
-            'Fixture 1 Thru 8 At 45', 'Red At 10', 'Green At 30', 'Blue At 100',
-            'Record Cue 2 "Blue Night"',
-            'ClearAll',
-            'Fixture 1 Thru 8 Full', 'Red At 100', 'Green At 100', 'Blue At 100',
-            'Fixture 9 Thru 12 Full', 'Green At 100', 'Red At 100',
-            'Fixture 21 Thru 24 Full',
-            'Record Cue 3 "Finale"',
-            'ClearAll',
-            'Go Cuelist 1', 'Go Cuelist 1',
-            'Fixture 3 Thru 5 At 100', 'Red At 100')) {
-        Submit-Line $cmd $please $line
+            'Group 2', 'At 100', 'Color Blue', 'Pan At 30', 'Tilt At 65',
+            'Record Cue 2 "Blue Movers"',
+            'ClearAll', 'Go Cuelist 1', 'Go Cuelist 1',
+            'Fixture 3 Thru 5', 'At 100')) {
+        Command $root $line
     }
 
-    # A half-typed command, like someone in the middle of programming.
-    Set-Text $cmd 'Fixture 1 Thru 4 At 50'
-    Start-Sleep -Milliseconds 700
+    Press $root 'NavFixtures'
+    Press $root 'AttrTabColor'
+    Save-Window $proc.MainWindowHandle (Join-Path $OutDir 'overview.png')
 
-    $full = Save-Window $proc.MainWindowHandle (Join-Path $OutDir 'overview.png')
-    # Command line and keypad: the bottom part of the window.
-    Save-Crop $full 0 ($full.Height - 345) $full.Width 345 (Join-Path $OutDir 'keypad.png')
-    $full.Dispose()
+    Press $root 'NavPatch';     Save-Window $proc.MainWindowHandle (Join-Path $OutDir 'patch.png')
+    Press $root 'NavProfiles'
+    $list = Find-ById $root 'ProfileList'
+    $items = $list.FindAll('Children', (New-Object System.Windows.Automation.PropertyCondition($AE::IsControlElementProperty, $true)))
+    $items[5].GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    Start-Sleep -Milliseconds 600
+    Press $root 'CopyProfile'
+    Save-Window $proc.MainWindowHandle (Join-Path $OutDir 'profiles.png')
+    Press $root 'NavUniverses'; Save-Window $proc.MainWindowHandle (Join-Path $OutDir 'universes.png')
+    Press $root 'NavRemote';    Save-Window $proc.MainWindowHandle (Join-Path $OutDir 'remote.png')
     "Saved screenshots to $OutDir"
 }
 finally {
@@ -125,4 +117,6 @@ finally {
         [void]$proc.CloseMainWindow()
         if (-not $proc.WaitForExit(5000)) { $proc.Kill() }
     }
+    Remove-Item Env:NXDMX_DATA -ErrorAction SilentlyContinue
+    Remove-Item -Recurse -Force $data -ErrorAction SilentlyContinue
 }

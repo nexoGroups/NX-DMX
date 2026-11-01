@@ -73,7 +73,7 @@ public class EngineTests
         using var engine = new DmxEngine(PatchedConsole()) { Output = new FailingOutput() };
 
         engine.Tick();
-        Assert.Equal("network down", engine.LastError);
+        Assert.Equal("Universe 1: network down", engine.LastError);
         Assert.Equal(0, engine.FramesSent);
 
         engine.Output = new RecordingOutput();
