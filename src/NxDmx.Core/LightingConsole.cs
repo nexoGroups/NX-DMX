@@ -2,6 +2,7 @@ using NxDmx.Core.Commands;
 using NxDmx.Core.Dmx;
 using NxDmx.Core.Engine;
 using NxDmx.Core.Programming;
+using NxDmx.Core.Storage;
 
 namespace NxDmx.Core;
 
@@ -44,6 +45,32 @@ public sealed class LightingConsole
     {
         lock (_gate)
             _interpreter.ClearHistory();
+    }
+
+    /// <summary>The show (patch, groups, cuelists) as the text of a show file.</summary>
+    public string ExportShow()
+    {
+        lock (_gate)
+            return ShowFile.Serialize(Show);
+    }
+
+    /// <summary>
+    /// Replaces the whole show with the one in the text. The programmer is emptied, all cuelists are off and Oops
+    /// forgets its history. Throws <see cref="ShowFileException"/> and changes nothing when the text is not valid.
+    /// </summary>
+    public void ImportShow(string json)
+    {
+        var loaded = ShowFile.Deserialize(json);
+
+        lock (_gate)
+        {
+            Show.ReplaceWith(loaded);
+            Programmer.ClearSelection();
+            Programmer.ClearValues();
+            _interpreter.ClearHistory();
+        }
+
+        Changed?.Invoke();
     }
 
     /// <summary>Reads the state under the lock. Return a copy; do not keep references to live objects.</summary>

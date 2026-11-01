@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -10,6 +11,8 @@ using System.Windows.Threading;
 using NxDmx.Core;
 using NxDmx.Core.ArtNet;
 using NxDmx.Core.Engine;
+using NxDmx.Core.Storage;
+using Microsoft.Win32;
 using Velopack;
 
 namespace NxDmx.App;
@@ -25,6 +28,10 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _statusTimer;
     private readonly UpdateService _updates = new();
 
+    private string? _showPath;
+    private string _savedJson = "";
+    private string _autosavedJson = "";
+    private string? _autosavedPath;
     private UpdateInfo? _availableUpdate;
     private bool _updateBusy;
     private ArtNetOutput? _artNet;
@@ -43,8 +50,8 @@ public partial class MainWindow : Window
         _engine = new DmxEngine(_console);
         LogList.ItemsSource = _log;
 
-        SeedDemoPatch();
-        _console.Changed += RefreshViews;
+        var startupMessage = LoadStartupShow();
+        _console.Changed += OnConsoleChanged;
 
         ApplyArtNet();
         _engine.Start();
@@ -57,19 +64,63 @@ public partial class MainWindow : Window
         Title = "NX-DMX " + _updates.CurrentVersion;
 
         RefreshViews();
+        UpdateShowState();
         AddLog("NX-DMX ready. Select with Fixture 1 Thru 4, set with At 50, finish with Please. Help lists everything.");
+        if (startupMessage is not null)
+            AddLog(startupMessage);
     }
 
     /// <summary>
-    /// Until the patch has its own editor and show files, start with a small rig so there is something to drive.
-    /// Runs through the normal commands, then wipes the Oops history so Oops cannot undo the setup.
+    /// Brings back the autosaved show of the last session. On the very first start there is none, so a small demo rig
+    /// is patched, through the normal commands, so there is something to drive. Returns a note for the log.
     /// </summary>
-    private void SeedDemoPatch()
+    private string? LoadStartupShow()
     {
+        string? note = null;
+        if (ShowStorage.ReadAutosave() is { } autosave)
+        {
+            try
+            {
+                _console.ImportShow(autosave);
+                _showPath = ShowStorage.ReadSessionPath();
+                _autosavedJson = _console.ExportShow();
+                _savedJson = BaselineOf(_showPath);
+                return "Restored your show from the last session.";
+            }
+            catch (ShowFileException ex)
+            {
+                note = $"The autosaved show could not be restored ({ex.Message}) and was ignored.";
+            }
+        }
+
         _console.Execute("Patch Fixture 1 Thru 8 Type RGBDim At 1.1");
         _console.Execute("Patch Fixture 9 Thru 12 Type Mover At 1.33");
         _console.Execute("Patch Fixture 21 Thru 24 Type Dimmer At 1.65");
         _console.ClearHistory();
+        _savedJson = _console.ExportShow();
+        return note;
+    }
+
+    /// <summary>The text a show file would have after loading, for telling unsaved changes from saved ones.</summary>
+    private static string BaselineOf(string? path)
+    {
+        if (path is null || !File.Exists(path))
+            return "";
+
+        try
+        {
+            return ShowFile.Serialize(ShowFile.Deserialize(ShowStorage.Read(path)));
+        }
+        catch (Exception ex) when (ex is ShowFileException or IOException or UnauthorizedAccessException)
+        {
+            return "";
+        }
+    }
+
+    private void OnConsoleChanged()
+    {
+        RefreshViews();
+        UpdateShowState();
     }
 
     // ---- command line ----------------------------------------------------------------------------------------
@@ -82,6 +133,12 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        if (!ConfirmDiscard())
+        {
+            e.Cancel = true;
+            return;
+        }
+
         _statusTimer.Stop();
         _engine.Dispose();
         _artNet?.Dispose();
@@ -305,6 +362,196 @@ public partial class MainWindow : Window
         return address;
     }
 
+    // ---- show files ------------------------------------------------------------------------------------------
+
+    private const string DialogFilter = "NX-DMX show (*.nxshow)|*.nxshow|All files (*.*)|*.*";
+
+    private bool HasUnsavedChanges => _console.ExportShow() != _savedJson;
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0)
+            return;
+
+        var shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+        switch (e.Key)
+        {
+            case Key.S:
+                if (shift) SaveShowAs(); else SaveShow();
+                break;
+            case Key.O:
+                OpenShow();
+                break;
+            case Key.N:
+                NewShow();
+                break;
+            default:
+                return;
+        }
+
+        e.Handled = true;
+    }
+
+    private void NewShow_Click(object sender, RoutedEventArgs e) => NewShow();
+
+    private void OpenShow_Click(object sender, RoutedEventArgs e) => OpenShow();
+
+    private void SaveShow_Click(object sender, RoutedEventArgs e) => SaveShow();
+
+    private void SaveShowAs_Click(object sender, RoutedEventArgs e) => SaveShowAs();
+
+    private void NewShow()
+    {
+        if (!ConfirmDiscard())
+            return;
+
+        _console.ImportShow(ShowFile.Serialize(new Show()));
+        _showPath = null;
+        _savedJson = _console.ExportShow();
+        AfterShowReplaced();
+        AddLog("New empty show. Patch fixtures with: Patch Fixture 1 Thru 8 Type RGBDim At 1.1");
+    }
+
+    private void OpenShow()
+    {
+        if (!ConfirmDiscard())
+            return;
+
+        var dialog = new OpenFileDialog
+        {
+            Filter = DialogFilter,
+            InitialDirectory = EnsureShowsFolder(),
+            Title = "Open show",
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            _console.ImportShow(ShowStorage.Read(dialog.FileName));
+        }
+        catch (Exception ex) when (ex is ShowFileException or IOException or UnauthorizedAccessException)
+        {
+            AddLog($"Could not open {Path.GetFileName(dialog.FileName)}: {ex.Message}", error: true);
+            MessageBox.Show(this, ex.Message, "Open show", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        _showPath = dialog.FileName;
+        _savedJson = _console.ExportShow();
+        AfterShowReplaced();
+        AddLog($"Opened {Path.GetFileName(dialog.FileName)}.");
+    }
+
+    /// <summary>Saves under the current name, or asks for one. Returns false when the operator cancelled or it failed.</summary>
+    private bool SaveShow() => _showPath is null ? SaveShowAs() : WriteShow(_showPath);
+
+    private bool SaveShowAs()
+    {
+        var dialog = new SaveFileDialog
+        {
+            Filter = DialogFilter,
+            DefaultExt = ShowFile.Extension,
+            AddExtension = true,
+            InitialDirectory = _showPath is null ? EnsureShowsFolder() : Path.GetDirectoryName(_showPath),
+            FileName = _showPath is null ? "My show" : Path.GetFileName(_showPath),
+            Title = "Save show",
+        };
+
+        return dialog.ShowDialog(this) == true && WriteShow(dialog.FileName);
+    }
+
+    private bool WriteShow(string path)
+    {
+        var json = _console.ExportShow();
+        try
+        {
+            ShowStorage.Write(path, json);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AddLog($"Could not save {Path.GetFileName(path)}: {ex.Message}", error: true);
+            MessageBox.Show(this, ex.Message, "Save show", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+
+        _showPath = path;
+        _savedJson = json;
+        UpdateShowState();
+        AddLog($"Saved {Path.GetFileName(path)}.");
+        return true;
+    }
+
+    /// <summary>Asks what to do with unsaved changes. Returns false when the operator cancelled.</summary>
+    private bool ConfirmDiscard()
+    {
+        if (!HasUnsavedChanges)
+            return true;
+
+        var answer = MessageBox.Show(this,
+            $"Save the changes to \"{ShowTitle()}\" first?",
+            "NX-DMX", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+
+        return answer switch
+        {
+            MessageBoxResult.Yes => SaveShow(),
+            MessageBoxResult.No => true,
+            _ => false,
+        };
+    }
+
+    private static string EnsureShowsFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(ShowStorage.ShowsFolder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The dialog then simply opens in its default folder.
+        }
+
+        return ShowStorage.ShowsFolder;
+    }
+
+    private void AfterShowReplaced()
+    {
+        _cuelistNumber = _console.Read((show, _) => show.Cuelists.Keys.FirstOrDefault(1));
+        RefreshViews();
+        UpdateShowState();
+        CommandLine.Focus();
+    }
+
+    private string ShowTitle() => _showPath is null ? "Untitled" : Path.GetFileNameWithoutExtension(_showPath);
+
+    /// <summary>Updates the show name and the unsaved marker, and keeps the autosave current.</summary>
+    private void UpdateShowState()
+    {
+        var json = _console.ExportShow();
+        var dirty = json != _savedJson;
+
+        ShowName.Text = ShowTitle();
+        ShowDirty.Visibility = dirty ? Visibility.Visible : Visibility.Collapsed;
+        Title = $"NX-DMX {_updates.CurrentVersion} · {ShowTitle()}{(dirty ? " *" : "")}";
+
+        if (json != _autosavedJson || _showPath != _autosavedPath)
+            Autosave(json);
+    }
+
+    private void Autosave(string json)
+    {
+        try
+        {
+            ShowStorage.WriteAutosave(json, _showPath);
+            _autosavedJson = json;
+            _autosavedPath = _showPath;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Not worth interrupting the operator; the next change tries again.
+        }
+    }
+
     // ---- updates ---------------------------------------------------------------------------------------------
 
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
@@ -378,13 +625,14 @@ public partial class MainWindow : Window
 
             var restartNow = MessageBox.Show(this,
                 $"NX-DMX {version} has been downloaded.\n\n" +
-                "Restart now? The DMX output stops while the update installs, and everything programmed since the start " +
-                "is lost, because shows cannot be saved yet.\n\n" +
+                "Restart now? The DMX output stops while the update installs. Your show comes back from the autosave; " +
+                "the programmer and the cuelist positions start empty.\n\n" +
                 "Choose No to install it when you close NX-DMX instead.",
                 "NX-DMX update", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
 
             if (restartNow)
             {
+                Autosave(_console.ExportShow());
                 _updates.ApplyAndRestart(update);
                 return;
             }

@@ -4,7 +4,7 @@
         Title="NX-DMX" Width="1400" Height="920" MinWidth="1200" MinHeight="780"
         Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}"
         FontFamily="Segoe UI" FontSize="13"
-        Loaded="Window_Loaded" Closing="Window_Closing">
+        Loaded="Window_Loaded" Closing="Window_Closing" PreviewKeyDown="Window_PreviewKeyDown">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -15,6 +15,7 @@
 
         <!-- Art-Net settings and output status -->
         <Border Grid.Row="0" Style="{StaticResource PanelStyle}" Padding="12,8" Margin="0,0,0,8">
+            <StackPanel>
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -39,6 +40,21 @@
                             ToolTip="Check for updates" AutomationProperties.AutomationId="VersionButton" Click="CheckUpdates_Click"/>
                 </StackPanel>
             </Grid>
+
+            <!-- Show file -->
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <TextBlock Text="SHOW" Style="{StaticResource PanelTitle}" Margin="0,0,12,0"/>
+                <TextBlock x:Name="ShowName" FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="120"/>
+                <TextBlock x:Name="ShowDirty" Text="● unsaved" Foreground="{StaticResource WarnBrush}" FontSize="11"
+                           VerticalAlignment="Center" Margin="6,0,0,0" Visibility="Collapsed"/>
+                <Button Content="New" Style="{StaticResource SmallButton}" Margin="18,0,0,0" ToolTip="New empty show (Ctrl+N)" Click="NewShow_Click"/>
+                <Button Content="Open" Style="{StaticResource SmallButton}" ToolTip="Open a show file (Ctrl+O)" Click="OpenShow_Click"/>
+                <Button Content="Save" Style="{StaticResource SmallButton}" ToolTip="Save the show (Ctrl+S)" Click="SaveShow_Click"/>
+                <Button Content="Save as" Style="{StaticResource SmallButton}" ToolTip="Save under a new name (Ctrl+Shift+S)" Click="SaveShowAs_Click"/>
+                <TextBlock Text="The show is also saved automatically after every change and comes back at the next start."
+                           Foreground="{StaticResource MutedBrush}" FontSize="11" VerticalAlignment="Center" Margin="14,0,0,0"/>
+            </StackPanel>
+            </StackPanel>
         </Border>
 
         <!-- Panels -->

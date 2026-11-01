@@ -31,7 +31,7 @@ kennt: Du tippst Befehle in eine Befehlszeile (`Fixture 1 Thru 8 At 50 Please`),
 Cues mit `Go`. Ein Fehler lässt sich jederzeit mit `Oops` zurücknehmen.
 
 > **Stand: frühe Version (0.x).** Die Grundlagen funktionieren und sind getestet, aber es fehlt noch einiges, unter
-> anderem Fades, Speichern und Laden von Shows und Executor-Fader (siehe [Roadmap](#roadmap)). Die Art-Net-Ausgabe
+> anderem Fades und Executor-Fader (siehe [Roadmap](#roadmap)). Die Art-Net-Ausgabe
 > wurde bisher gegen einen Test-Empfänger geprüft, noch nicht an echter Hardware. Setze sie vorerst nicht für eine
 > Live-Show ein, bei der etwas schiefgehen darf.
 
@@ -47,6 +47,7 @@ Cues mit `Go`. Ein Fehler lässt sich jederzeit mit `Oops` zurücknehmen.
 - **Gruppen**, Fixture-Typen `Dimmer`, `RGB`, `RGBW`, `RGBDim` und `Mover` (Pan/Tilt in 16 Bit)
 - **Mischen wie auf dem Pult:** Helligkeit nach HTP, alle anderen Werte nach LTP, der Programmer liegt obenauf
 - **Live-Ansicht** von Fixtures, Cuelist, Gruppen, Befehls-Log und dem DMX-Wert jedes Kanals
+- **Shows speichern und laden** (`.nxshow`), dazu eine automatische Sicherung nach jeder Änderung
 - **Automatische Updates:** Eine neue Version erscheint als grüner Button in der Kopfzeile (siehe [Updates](#updates))
 
 ## Installation
@@ -67,7 +68,8 @@ Voraussetzung: Windows 10 oder 11, 64 Bit.
 
 ## Schnellstart
 
-Beim Start ist ein Demo-Rig gepatcht (8 RGB-Dimmer-Fixtures, 4 Mover, 4 Dimmer in Universum 1). Alle Befehle schreibst
+Beim allerersten Start ist ein Demo-Rig gepatcht (8 RGB-Dimmer-Fixtures, 4 Mover, 4 Dimmer in Universum 1). Danach
+startet NX-DMX immer mit der Show der letzten Sitzung. Alle Befehle schreibst
 du in die Zeile `NX>` unten und bestätigst mit **Enter** oder der **Please**-Taste. Die Tasten darunter tippen dieselben
 Wörter für dich ein.
 
@@ -122,6 +124,27 @@ Befehle auf.
 `Go`, `Back`, `Goto` und `Off` gehören nicht dazu, wie bei der grandMA. Ein fehlgeschlagener Befehl hinterlässt nichts
 Halbfertiges.
 
+## Shows speichern und laden
+
+Ein Show besteht aus dem Patch, den Gruppen und den Cuelists mit allen Cues. Die Zeile **SHOW** in der Kopfzeile zeigt
+den Namen, und ein oranges **● unsaved** erscheint, solange es ungespeicherte Änderungen gibt.
+
+| Taste | Tastenkürzel | Wirkung |
+|---|---|---|
+| **New** | `Strg+N` | Leere Show ohne Patch anlegen |
+| **Open** | `Strg+O` | Eine `.nxshow`-Datei öffnen |
+| **Save** | `Strg+S` | Speichern, beim ersten Mal mit Namensabfrage |
+| **Save as** | `Strg+Umschalt+S` | Unter neuem Namen speichern |
+
+- Die Dateien liegen standardmäßig in `Dokumente\NX-DMX Shows` und sind lesbares JSON. Sie lassen sich kopieren, sichern
+  und auf einen anderen Rechner mitnehmen.
+- **Automatische Sicherung:** Nach jeder Änderung schreibt NX-DMX die aktuelle Show nach `%AppData%\NX-DMX`. Nach einem
+  Absturz, einem Stromausfall oder einem Update-Neustart ist sie beim nächsten Start wieder da.
+- Vor **New**, **Open** und dem Schließen fragt NX-DMX nach, wenn es ungespeicherte Änderungen gibt.
+- Nicht gespeichert werden der Programmer, die Auswahl und die aktuelle Cue-Position der Cuelists. Nach dem Laden ist
+  alles aus.
+- Eine kaputte oder zu neue Datei wird mit einer Meldung abgelehnt und lässt die aktuelle Show unverändert.
+
 ## Art-Net einrichten
 
 Oben links in der Kopfzeile stellst du die Ausgabe ein:
@@ -154,8 +177,8 @@ soll oder erst beim nächsten Beenden.
 - Ohne Internet passiert nichts, und es gibt keine Fehlermeldung.
 - Mit einem Klick auf die Versionsnummer (`v0.1.0`) neben dem Status suchst du von Hand nach Updates.
 - Updates funktionieren in der **installierten** Version. Eine aus dem Quellcode gestartete Version meldet das im Log.
-- Weil Shows noch nicht gespeichert werden können, geht beim Neustart die aktuelle Programmierung verloren. Der Dialog
-  weist darauf hin.
+- Deine Show bleibt beim Neustart erhalten, weil sie automatisch gesichert wird (siehe [Shows speichern](#shows-speichern-und-laden)).
+  Der Programmer und die Cuelist-Positionen starten danach leer. Der Dialog weist darauf hin.
 
 Technisch steckt [Velopack](https://velopack.io) dahinter: Der Installer und die Update-Pakete liegen als Dateien am
 GitHub-Release, und wo möglich werden nur die Unterschiede (Delta-Pakete) geladen.
@@ -207,7 +230,7 @@ Ordner (oder eine URL) mit den Release-Dateien setzen, dann sucht die installier
 ## Roadmap
 
 - [ ] Fade- und Delay-Zeiten
-- [ ] Shows speichern und laden
+- [x] Shows speichern und laden, automatische Sicherung
 - [ ] Presets (Color, Position, Beam)
 - [ ] Executor-Fader und Seiten
 - [ ] Copy und Move, Highlight und Locate
