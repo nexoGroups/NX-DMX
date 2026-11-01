@@ -1,0 +1,255 @@
+﻿<Window x:Class="NxDmx.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="NX-DMX" Width="1400" Height="920" MinWidth="1200" MinHeight="780"
+        Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}"
+        FontFamily="Segoe UI" FontSize="13"
+        Loaded="Window_Loaded" Closing="Window_Closing">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Art-Net settings and output status -->
+        <Border Grid.Row="0" Style="{StaticResource PanelStyle}" Padding="12,8" Margin="0,0,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="NX-DMX" FontSize="18" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
+                               VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <TextBlock Text="Art-Net target" Style="{StaticResource FieldLabel}"/>
+                    <TextBox x:Name="TargetIp" Width="130" Text="255.255.255.255" KeyDown="Settings_KeyDown"/>
+                    <TextBlock Text="Local IP (optional)" Style="{StaticResource FieldLabel}"/>
+                    <TextBox x:Name="LocalIp" Width="130" KeyDown="Settings_KeyDown"/>
+                    <Button Content="Apply" Style="{StaticResource SmallButton}" Margin="10,0,0,0" Click="ApplyArtNet_Click"/>
+                    <CheckBox x:Name="OutputEnabled" Content="Output enabled" IsChecked="True" VerticalAlignment="Center"
+                              Margin="16,0,0,0" Checked="OutputEnabled_Changed" Unchecked="OutputEnabled_Changed"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="UpdateButton" Style="{StaticResource UpdateButton}" Visibility="Collapsed"
+                            AutomationProperties.AutomationId="UpdateButton" Click="Update_Click"/>
+                    <TextBlock x:Name="StatusText" VerticalAlignment="Center" FontFamily="Consolas"/>
+                    <Button x:Name="VersionButton" Style="{StaticResource SmallButton}" Margin="14,0,0,0" Foreground="{StaticResource MutedBrush}"
+                            ToolTip="Check for updates" AutomationProperties.AutomationId="VersionButton" Click="CheckUpdates_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Panels -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="2*" MinWidth="470"/>
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="3*"/>
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="*" MinHeight="130"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Style="{StaticResource PanelStyle}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="FIXTURES" Style="{StaticResource PanelTitle}" Margin="0,0,0,8"/>
+                        <DataGrid x:Name="FixtureGrid">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding InSelection}" Value="True">
+                                            <Setter Property="Background" Value="#44F5A524"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>
+                                <DataGridTextColumn Header="LABEL" Binding="{Binding Label}" Width="*"/>
+                                <DataGridTextColumn Header="TYPE" Binding="{Binding Type}" Width="80"/>
+                                <DataGridTextColumn Header="PATCH" Binding="{Binding Patch}" Width="70"/>
+                                <DataGridTextColumn Header="DIM" Binding="{Binding Dimmer}" Width="50" ElementStyle="{StaticResource RightCell}"/>
+                                <DataGridTextColumn Header="RED" Binding="{Binding Red}" Width="50" ElementStyle="{StaticResource RightCell}"/>
+                                <DataGridTextColumn Header="GRN" Binding="{Binding Green}" Width="50" ElementStyle="{StaticResource RightCell}"/>
+                                <DataGridTextColumn Header="BLU" Binding="{Binding Blue}" Width="50" ElementStyle="{StaticResource RightCell}"/>
+                                <DataGridTextColumn Header="WHT" Binding="{Binding White}" Width="50" ElementStyle="{StaticResource RightCell}"/>
+                                <DataGridTextColumn Header="PAN" Binding="{Binding Pan}" Width="50" ElementStyle="{StaticResource RightCell}"/>
+                                <DataGridTextColumn Header="TILT" Binding="{Binding Tilt}" Width="50" ElementStyle="{StaticResource RightCell}"/>
+                                <DataGridTextColumn Header="PRG" Binding="{Binding Programmer}" Width="40"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="2" Style="{StaticResource PanelStyle}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="COMMAND LOG" Style="{StaticResource PanelTitle}" Margin="0,0,0,6"/>
+                        <ScrollViewer x:Name="LogScroll" VerticalScrollBarVisibility="Auto" Focusable="False">
+                            <ItemsControl x:Name="LogList" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Text}" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,1">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource GoodBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsEcho}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsError}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource BadBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="130"/>
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="1.3*"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Style="{StaticResource PanelStyle}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="CUELIST" Style="{StaticResource PanelTitle}"/>
+                        <DockPanel DockPanel.Dock="Top" Margin="0,6,0,6" LastChildFill="True">
+                            <Button DockPanel.Dock="Right" Content="OFF" Style="{StaticResource SmallButton}" Click="CuelistOff_Click"/>
+                            <Button DockPanel.Dock="Right" Content="GO" Style="{StaticResource SmallGoButton}" Click="CuelistGo_Click"/>
+                            <Button DockPanel.Dock="Right" Content="BACK" Style="{StaticResource SmallButton}" Click="CuelistBack_Click"/>
+                            <Button DockPanel.Dock="Left" Content="◀" Style="{StaticResource SmallButton}" Click="PreviousCuelist_Click"/>
+                            <Button DockPanel.Dock="Left" Content="▶" Style="{StaticResource SmallButton}" Click="NextCuelist_Click"/>
+                            <TextBlock x:Name="CuelistTitle" Margin="10,0" FontWeight="SemiBold" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </DockPanel>
+                        <DataGrid x:Name="CueGrid">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                            <Setter Property="Background" Value="#4428C77D"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="" Binding="{Binding Marker}" Width="30"/>
+                                <DataGridTextColumn Header="CUE" Binding="{Binding Number}" Width="60"/>
+                                <DataGridTextColumn Header="LABEL" Binding="{Binding Label}" Width="*"/>
+                                <DataGridTextColumn Header="VALUES" Binding="{Binding ValueCount}" Width="70" ElementStyle="{StaticResource RightCell}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="2" Style="{StaticResource PanelStyle}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="GROUPS" Style="{StaticResource PanelTitle}" Margin="0,0,0,6"/>
+                        <DataGrid x:Name="GroupGrid">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="NO" Binding="{Binding Number}" Width="50"/>
+                                <DataGridTextColumn Header="LABEL" Binding="{Binding Label}" Width="*"/>
+                                <DataGridTextColumn Header="FIXTURES" Binding="{Binding Fixtures}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="4" Style="{StaticResource PanelStyle}">
+                    <DockPanel>
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="True">
+                            <Button DockPanel.Dock="Right" Content="▶" Style="{StaticResource SmallButton}" Click="NextUniverse_Click"/>
+                            <Button DockPanel.Dock="Right" Content="◀" Style="{StaticResource SmallButton}" Click="PreviousUniverse_Click"/>
+                            <TextBlock x:Name="MonitorTitle" Style="{StaticResource PanelTitle}"/>
+                        </DockPanel>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+                            <TextBlock x:Name="MonitorText" FontFamily="Consolas" FontSize="12"/>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- Command line -->
+        <Border Grid.Row="2" Style="{StaticResource PanelStyle}" Padding="14,8" Margin="0,8,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="NX&gt;" FontFamily="Consolas" FontSize="22" Foreground="{StaticResource AccentBrush}"
+                           Margin="0,0,10,0" VerticalAlignment="Center"/>
+                <TextBox x:Name="CommandLine" Grid.Column="1" FontFamily="Consolas" FontSize="22"
+                         Background="Transparent" BorderThickness="0" VerticalContentAlignment="Center"
+                         PreviewKeyDown="CommandLine_PreviewKeyDown"/>
+                <TextBlock x:Name="SelectionText" Grid.Column="2" FontFamily="Consolas" Foreground="{StaticResource WarnBrush}"
+                           VerticalAlignment="Center" Margin="16,0,0,0"/>
+            </Grid>
+        </Border>
+
+        <!-- Keypad -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center">
+            <UniformGrid Columns="4" Margin="0,0,24,0">
+                <Button Content="Record" Style="{StaticResource RecordKey}" Tag="Record " Click="Insert_Click"/>
+                <Button Content="Update" Style="{StaticResource Key}" Tag="Update " Click="Insert_Click"/>
+                <Button Content="Delete" Style="{StaticResource Key}" Tag="Delete " Click="Insert_Click"/>
+                <Button Content="Label" Style="{StaticResource Key}" Tag="Label " Click="Insert_Click"/>
+                <Button Content="Fixture" Style="{StaticResource Key}" Tag="Fixture " Click="Insert_Click"/>
+                <Button Content="Group" Style="{StaticResource Key}" Tag="Group " Click="Insert_Click"/>
+                <Button Content="Cue" Style="{StaticResource Key}" Tag="Cue " Click="Insert_Click"/>
+                <Button Content="Cuelist" Style="{StaticResource Key}" Tag="Cuelist " Click="Insert_Click"/>
+                <Button Content="Go" Style="{StaticResource GoKey}" Tag="Go " Click="Insert_Click"/>
+                <Button Content="Back" Style="{StaticResource Key}" Tag="Back " Click="Insert_Click"/>
+                <Button Content="Off" Style="{StaticResource Key}" Tag="Off " Click="Insert_Click"/>
+                <Button Content="Goto" Style="{StaticResource Key}" Tag="Goto Cue " Click="Insert_Click"/>
+                <Button Content="Patch" Style="{StaticResource Key}" Tag="Patch Fixture " Click="Insert_Click"/>
+                <Button Content="Type" Style="{StaticResource Key}" Tag="Type " Click="Insert_Click"/>
+                <Button Content="ClearAll" Style="{StaticResource Key}" Tag="ClearAll" Click="Execute_Click"/>
+                <Button Content="Help" Style="{StaticResource Key}" Tag="Help" Click="Execute_Click"/>
+            </UniformGrid>
+
+            <UniformGrid Columns="4" Margin="0,0,24,0">
+                <Button Content="7" Style="{StaticResource Key}" Tag="7" Click="Insert_Click"/>
+                <Button Content="8" Style="{StaticResource Key}" Tag="8" Click="Insert_Click"/>
+                <Button Content="9" Style="{StaticResource Key}" Tag="9" Click="Insert_Click"/>
+                <Button Content="Thru" Style="{StaticResource Key}" Tag="Thru " Click="Insert_Click"/>
+                <Button Content="4" Style="{StaticResource Key}" Tag="4" Click="Insert_Click"/>
+                <Button Content="5" Style="{StaticResource Key}" Tag="5" Click="Insert_Click"/>
+                <Button Content="6" Style="{StaticResource Key}" Tag="6" Click="Insert_Click"/>
+                <Button Content="+" Style="{StaticResource Key}" Tag="+ " Click="Insert_Click"/>
+                <Button Content="1" Style="{StaticResource Key}" Tag="1" Click="Insert_Click"/>
+                <Button Content="2" Style="{StaticResource Key}" Tag="2" Click="Insert_Click"/>
+                <Button Content="3" Style="{StaticResource Key}" Tag="3" Click="Insert_Click"/>
+                <Button Content="-" Style="{StaticResource Key}" Tag="- " Click="Insert_Click"/>
+                <Button Content="0" Style="{StaticResource Key}" Tag="0" Click="Insert_Click"/>
+                <Button Content="." Style="{StaticResource Key}" Tag="." Click="Insert_Click"/>
+                <Button Content="At" Style="{StaticResource Key}" Tag="At " Click="Insert_Click"/>
+                <Button Content="Full" Style="{StaticResource Key}" Tag="Full " Click="Insert_Click"/>
+            </UniformGrid>
+
+            <StackPanel>
+                <Button Content="Oops" Style="{StaticResource OopsKey}" Width="100" Tag="Oops" Click="Execute_Click"/>
+                <Button Content="Clear" Style="{StaticResource Key}" Width="100" Click="Clear_Click"/>
+                <Button Content="⌫" Style="{StaticResource Key}" Width="100" Click="Backspace_Click"/>
+                <Button Content="Please" Style="{StaticResource PleaseKey}" Width="100" Click="Please_Click"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

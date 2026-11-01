@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NxDmx.App/NxDmx.App.csproj" />
+    <Project Path="src/NxDmx.Core/NxDmx.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NxDmx.Tests/NxDmx.Tests.csproj" />
+  </Folder>
+</Solution>
