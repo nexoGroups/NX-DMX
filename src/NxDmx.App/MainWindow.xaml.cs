@@ -320,7 +320,13 @@ public partial class MainWindow : Window
     private async Task CheckForUpdatesAsync(bool manual)
     {
         if (_updateBusy || _availableUpdate is not null)
+        {
+            if (manual)
+                AddLog(_availableUpdate is null
+                    ? "Already checking for updates."
+                    : $"NX-DMX {_availableUpdate.TargetFullRelease.Version} is available. Press the green Update button in the top bar.");
             return;
+        }
 
         if (!_updates.IsInstalled)
         {
