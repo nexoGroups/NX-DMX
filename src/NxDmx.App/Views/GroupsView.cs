@@ -45,12 +45,35 @@ public sealed class GroupsView : ConsoleView
             _tiles.Children.Add(Tile(group.Number.ToString(), group.Label, $"{group.Count} fixtures", group.Fixtures, group.IsSelected, $"Group {group.Number}"));
 
         var next = Enumerable.Range(1, 9999).First(n => snapshot.Groups.All(g => g.Number != n));
-        var add = Tile("+", "New group", snapshot.Selection.Count == 0 ? "select fixtures first" : $"from {snapshot.SelectionText}", "", false, $"Record Group {next}");
+        var add = Tile("+", "New group", snapshot.Selection.Count == 0 ? "select fixtures first" : $"from {snapshot.SelectionText}", "", false, $"Record Group {next}", () => NewGroup(next));
         add.Opacity = snapshot.Selection.Count == 0 ? 0.45 : 1;
         _tiles.Children.Add(add);
     }
 
-    private Button Tile(string number, string label, string count, string fixtures, bool selected, string command)
+    /// <summary>
+    /// Stores the selection as a new group. A selection that is already a group is refused, so that clicking the tile
+    /// twice does not pile up identical groups. After Record or Delete the tile behaves like any other click.
+    /// </summary>
+    private void NewGroup(int number)
+    {
+        if (Host.IsVerbPending)
+        {
+            Host.Click($"Record Group {number}");
+            return;
+        }
+
+        var snapshot = Host.Snapshot;
+        var same = snapshot.Selection.Count > 0 ? snapshot.Groups.FirstOrDefault(g => g.IsSelected) : null;
+        if (same is not null)
+        {
+            Host.Notify($"Group {same.Number} \"{same.Label}\" already holds exactly these fixtures. Select others first.", isError: true);
+            return;
+        }
+
+        Host.Click($"Record Group {number}");
+    }
+
+    private Button Tile(string number, string label, string count, string fixtures, bool selected, string command, Action? click = null)
     {
         var grid = new Grid { Margin = new Thickness(10, 8, 10, 8) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -87,7 +110,7 @@ public sealed class GroupsView : ConsoleView
         };
         tile.MouseEnter += (_, _) => { if (!selected) tile.Background = Ui.Brush("Surface3Brush"); };
         tile.MouseLeave += (_, _) => { if (!selected) tile.Background = Ui.Brush("Surface2Brush"); };
-        tile.Click += (_, _) => Host.Click(command);
+        tile.Click += (_, _) => (click ?? (() => Host.Click(command)))();
         System.Windows.Automation.AutomationProperties.SetAutomationId(tile, "Group" + number);
         return tile;
     }

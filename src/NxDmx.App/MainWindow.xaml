@@ -57,8 +57,8 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="46"/>
                 <RowDefinition Height="*" MinHeight="200"/>
-                <RowDefinition Height="5"/>
-                <RowDefinition Height="214" MinHeight="150"/>
+                <RowDefinition Height="7"/>
+                <RowDefinition x:Name="BottomRow" Height="214" MinHeight="150" MaxHeight="330"/>
             </Grid.RowDefinitions>
 
             <!-- Header: view title, show, output controls, status -->
@@ -92,7 +92,8 @@
 
             <ContentControl x:Name="ViewHost" Grid.Row="1" Focusable="False" IsTabStop="False"/>
 
-            <GridSplitter Grid.Row="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Focusable="False" ResizeDirection="Rows"/>
+            <GridSplitter Grid.Row="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Focusable="False" ResizeDirection="Rows"
+                          ToolTip="Drag to resize, double-click to reset" MouseDoubleClick="Splitter_DoubleClick"/>
 
             <!-- Bottom: programmer table / log, command line, keypad -->
             <Grid Grid.Row="3">
@@ -108,7 +109,7 @@
                     <c:InfoPanel x:Name="Info"/>
                     <c:CommandLineBar x:Name="CommandBar" Grid.Row="1"/>
                 </Grid>
-                <c:Keypad x:Name="Pad" Grid.Column="1" Width="560"/>
+                <c:Keypad x:Name="Pad" Grid.Column="1" Width="560" Height="204" VerticalAlignment="Top"/>
             </Grid>
         </Grid>
     </Grid>

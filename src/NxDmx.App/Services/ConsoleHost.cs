@@ -267,6 +267,14 @@ public sealed class ConsoleHost : IDisposable
     /// <summary>The answer to the last command typed or clicked.</summary>
     public (string Text, bool IsError) Feedback { get; private set; } = ("", false);
 
+    /// <summary>Shows a message next to the log tabs and writes it to the log, for things a view refuses to do itself.</summary>
+    public void Notify(string text, bool isError = false)
+    {
+        AddLog(text, error: isError);
+        Feedback = (text, isError);
+        FeedbackChanged?.Invoke();
+    }
+
     public event Action? FeedbackChanged;
 
     /// <summary>Walks back through earlier lines (Up) or forward (Down). Returns the text to show, or null at the end.</summary>

@@ -231,6 +231,9 @@ public partial class MainWindow : Window
 
     private void Blackout_Click(object sender, RoutedEventArgs e) => _host.Run("Blackout");
 
+    /// <summary>Double-click on the splitter puts the bottom area back to its normal height.</summary>
+    private void Splitter_DoubleClick(object sender, MouseButtonEventArgs e) => BottomRow.Height = new GridLength(214);
+
     // ---- header ----------------------------------------------------------------------------------------------
 
     private void UpdateHeader()
