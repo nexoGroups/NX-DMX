@@ -204,7 +204,8 @@ Hinweis: Eine frisch installierte .NET-SDK kennt ein bereits offenes Terminal no
 | `src/NxDmx.Core` | Alles ohne Oberfläche: Art-Net, Fixtures und Patch, Programmer, Cuelists, Befehlsinterpreter, Renderer, Ausgabe-Engine |
 | `src/NxDmx.App` | WPF-Oberfläche: Befehlszeile, Tastenfeld, Fixture-Tabelle, Cuelist, Gruppen, Log, DMX-Monitor, Updater |
 | `tests/NxDmx.Tests` | xUnit-Tests für Art-Net-Pakete, Befehle, Rendering, Oops und Engine |
-| `tools/` | Skripte für Icon, Screenshots und das Paketieren eines Releases |
+| `tools/` | Skripte für Icon, Screenshots, das Paketieren eines Releases und den Update-Test |
+| `.claude/skills/release` | Anleitung für Claude Code, wie eine neue Version veröffentlicht wird |
 
 So läuft ein Frame (40 Hz): `Programmer` und aktive `Cuelist`s → `FrameRenderer` → `DmxFrame` → `ArtNetOutput`
 (ArtDmx per UDP). Die Cues arbeiten mit Tracking: Der Ausgang entsteht aus allen Cues bis zum aktuellen, der Reihe nach
