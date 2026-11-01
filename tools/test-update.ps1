@@ -128,6 +128,16 @@ finally {
         Start-Sleep -Seconds 8                    # it deletes the folder itself after a delay
     }
     if (Test-Path $installDir) { Remove-Item -Recurse -Force $installDir -ErrorAction SilentlyContinue }
+
+    # Windows remembers every program that was started in its per-user cache, and launchers such as the PowerToys command
+    # palette list those entries. Without this, each test run leaves "NX-DMX" entries behind that point to deleted files.
+    foreach ($key in 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache',
+                     'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Compatibility Assistant\Store') {
+        if (-not (Test-Path $key)) { continue }
+        foreach ($entry in (Get-ItemProperty $key -ErrorAction SilentlyContinue).PSObject.Properties) {
+            if ($entry.Name -like "$installDir*") { Remove-ItemProperty -Path $key -Name $entry.Name -ErrorAction SilentlyContinue }
+        }
+    }
     if (-not $hadAppData) { Remove-Item -Recurse -Force $appData -ErrorAction SilentlyContinue }
     if ($dataDir) { Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue }
     Remove-Item Env:NXDMX_DATA -ErrorAction SilentlyContinue

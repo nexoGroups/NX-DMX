@@ -87,6 +87,8 @@ release is public:
    into a temp folder, lets the app find the new release on GitHub, clicks the update button and the dialog, and checks
    that the new version is installed and restarted. It uninstalls everything afterwards. Also run it once with
    `-Answer no` when the update code changed (that path installs when the app closes).
+   The script also removes the Windows program-cache (MuiCache) entries of the temp install, so launchers such as the
+   PowerToys command palette do not keep listing it. Do the same by hand for any other throw-away install you start.
    It needs port 6454 free (no other Art-Net software running). It removes `%AppData%\NX-DMX` afterwards unless that
    folder existed before; if the user uses NX-DMX for real, their autosave there is never touched by the cleanup, but the
    test app does write to it while it runs, so ask the user to close their own NX-DMX first.
