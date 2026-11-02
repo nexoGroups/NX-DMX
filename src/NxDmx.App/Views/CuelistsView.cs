@@ -92,7 +92,7 @@ public sealed class CuelistsView : ConsoleView
         if (list is not null)
             _pendingNew = false;
 
-        var signature = string.Join('|', snapshot.Cuelists.Select(l => $"{l.Number}:{l.Label}:{l.Active}:{l.CurrentText}:{l.Cues.Count}")) + "#" + _selected;
+        var signature = string.Join('|', snapshot.Cuelists.Select(l => $"{l.Number}:{l.Label}:{l.Active}:{l.CurrentText}:{l.Cues.Count}")) + "#" + _selected + "#" + Host.Highlight?.Kind + Host.Highlight?.Target;
         if (signature != _signature)
         {
             _signature = signature;
@@ -166,7 +166,7 @@ public sealed class CuelistsView : ConsoleView
             Child = grid,
             Cursor = Cursors.Hand,
             Background = Ui.Brush(selected ? "Surface3Brush" : "Surface2Brush"),
-            BorderBrush = Ui.Brush(list.Active ? "GreenBrush" : selected ? "AmberBrush" : "LineBrush"),
+            BorderBrush = Ui.Brush(Host.Highlight is { Kind: Core.Playback.FaderKind.Cuelist } hl && hl.Target == list.Number ? "BlueBrush" : list.Active ? "GreenBrush" : selected ? "AmberBrush" : "LineBrush"),
             BorderThickness = new Thickness(selected || list.Active ? 2 : 1),
         };
         card.MouseLeftButtonDown += (_, e) =>

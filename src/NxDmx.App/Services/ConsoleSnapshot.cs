@@ -25,16 +25,33 @@ public sealed record FixtureInfo(
     byte Red,
     byte Green,
     byte Blue,
-    string Detail)
+    string Detail,
+    string TypeDisplay = "")
 {
     public string Patch => $"{Universe}.{Address}";
 }
 
-public sealed record GroupInfo(int Number, string Label, int Count, string Fixtures, bool IsSelected);
+public sealed record GroupInfo(int Number, string Label, int Count, string Fixtures, bool IsSelected, IReadOnlyList<int>? Ids = null)
+{
+    public IReadOnlyList<int> FixtureIds => Ids ?? [];
+}
 
 public sealed record CueInfo(decimal Number, string NumberText, string Label, int ValueCount, bool IsCurrent);
 
-public sealed record CuelistInfo(int Number, string Label, bool Active, string CurrentText, IReadOnlyList<CueInfo> Cues);
+public sealed record CuelistInfo(int Number, string Label, bool Active, string CurrentText, IReadOnlyList<CueInfo> Cues, IReadOnlyList<int>? Fixtures = null)
+{
+    /// <summary>The fixtures any cue of the cuelist has values for.</summary>
+    public IReadOnlyList<int> FixtureIds => Fixtures ?? [];
+}
+
+/// <summary>One fader of the fader bar with what it controls, resolved for display.</summary>
+public sealed record FaderInfo(int Number, FaderKind Kind, int Target, string Text, string Color, double Level, bool Exists, string ButtonText)
+{
+    public bool IsAssigned => Kind != FaderKind.None;
+}
+
+/// <summary>A colour of the colour library: built-in or the operator's own.</summary>
+public sealed record ColorInfo(string Name, string Hex, bool Custom);
 
 /// <summary>A block of DMX channels taken by one fixture, for the address map.</summary>
 public sealed record AddressBlock(int FixtureId, string Label, int Start, int End, bool Conflict);
@@ -84,7 +101,9 @@ public sealed record ConsoleSnapshot(
     string SelectionText,
     int ProgrammerValueCount,
     bool Blackout,
-    double Master)
+    double Master,
+    IReadOnlyList<FaderInfo> Faders,
+    IReadOnlyList<ColorInfo> Colors)
 {
     public static ConsoleSnapshot Build(Show show, Programmer programmer, OutputState output)
     {
@@ -100,7 +119,7 @@ public sealed record ConsoleSnapshot(
         var groups = show.Groups.Values
             .Select(g => new GroupInfo(
                 g.Number, g.Label, g.FixtureIds.Count, SelectionFormatter.Format(g.FixtureIds),
-                g.FixtureIds.Count > 0 && selection.SetEquals(g.FixtureIds)))
+                g.FixtureIds.Count > 0 && selection.SetEquals(g.FixtureIds), [.. g.FixtureIds]))
             .ToList();
 
         var cuelists = show.Cuelists.Values.Select(l => CuelistOf(l)).ToList();
@@ -128,7 +147,8 @@ public sealed record ConsoleSnapshot(
         return new ConsoleSnapshot(
             fixtures, groups, cuelists, universes, profiles, attributes, columns, rows,
             selection, SelectionFormatter.Format(programmer.Selection), programmer.Values.Count,
-            output.Blackout, output.GrandMaster);
+            output.Blackout, output.GrandMaster, FadersOf(show, output),
+            show.AllColors.Select(c => new ColorInfo(c.Name, c.Hex, c.Custom)).ToList());
     }
 
     private static int CountChannels(List<Fixture> fixtures)
@@ -143,6 +163,52 @@ public sealed record ConsoleSnapshot(
         return used.Count(u => u);
     }
 
+    /// <summary>All faders of every page: assigned ones with their data, free ones as empty entries.</summary>
+    private static List<FaderInfo> FadersOf(Show show, OutputState output)
+    {
+        var result = new List<FaderInfo>();
+        for (var number = 1; number <= FaderConfig.MaxFaders; number++)
+        {
+            if (!show.Faders.TryGetValue(number, out var config))
+            {
+                result.Add(new FaderInfo(number, FaderKind.None, 0, "", "", 0, true, ""));
+                continue;
+            }
+
+            var label = config.Label;
+            var exists = true;
+            var level = FrameRenderer.DefaultLevel(config.Kind);
+            string button;
+            switch (config.Kind)
+            {
+                case FaderKind.Cuelist:
+                    exists = show.Cuelists.TryGetValue(config.Target, out var cuelist);
+                    if (label.Length == 0)
+                        label = exists ? $"{config.Target} {cuelist!.Label}" : $"Cuelist {config.Target}";
+                    level = output.FaderLevel(number, level);
+                    button = "GO";
+                    break;
+                case FaderKind.Group:
+                    exists = show.Groups.TryGetValue(config.Target, out var group);
+                    if (label.Length == 0)
+                        label = exists ? $"{config.Target} {group!.Label}" : $"Group {config.Target}";
+                    level = output.FaderLevel(number, level);
+                    button = level > 0 ? "OUT" : "FULL";
+                    break;
+                default:
+                    if (label.Length == 0)
+                        label = "Master";
+                    level = output.GrandMaster;
+                    button = output.Blackout ? "BO ON" : "BO";
+                    break;
+            }
+
+            result.Add(new FaderInfo(number, config.Kind, config.Target, label, config.Color, level, exists, button));
+        }
+
+        return result;
+    }
+
     private static CuelistInfo CuelistOf(Cuelist list)
     {
         var cues = list.Cues
@@ -152,7 +218,7 @@ public sealed record ConsoleSnapshot(
             .ToList();
         var current = cues.FirstOrDefault(c => c.IsCurrent);
         var text = current is null ? "Off" : $"Cue {current.NumberText}{(current.Label.Length > 0 ? " " + current.Label : "")}";
-        return new CuelistInfo(list.Number, list.Label, list.IsActive, text, cues);
+        return new CuelistInfo(list.Number, list.Label, list.IsActive, text, cues, [.. list.Cues.SelectMany(c => c.Values.Keys.Select(k => k.FixtureId)).Distinct()]);
     }
 
     private static FixtureInfo FixtureOf(Fixture fixture, IReadOnlyDictionary<ValueKey, double> resolved, bool selected, bool programmed, bool conflict)
@@ -207,7 +273,7 @@ public sealed record ConsoleSnapshot(
         var detail = Detail(fixture, resolved);
         return new FixtureInfo(
             fixture.Id, fixture.Label, fixture.Type.Name, fixture.Universe, fixture.Address, fixture.EndAddress,
-            fixture.Type.Footprint, selected, programmed, conflict, intensity, Channel(r), Channel(g), Channel(b), detail);
+            fixture.Type.Footprint, selected, programmed, conflict, intensity, Channel(r), Channel(g), Channel(b), detail, fixture.Type.DisplayName);
     }
 
     /// <summary>Pan/tilt and the like as short text on the tile.</summary>

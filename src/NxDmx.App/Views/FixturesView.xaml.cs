@@ -18,6 +18,7 @@ public sealed class TileVm : INotifyPropertyChanged
 {
     private bool _selected;
     private bool _programmed;
+    private bool _highlighted;
     private string _level = "";
     private Brush _brush = Brushes.Gray;
     private string _label = "";
@@ -48,6 +49,9 @@ public sealed class TileVm : INotifyPropertyChanged
                 OnChanged(nameof(ProgrammedVisibility));
         }
     }
+
+    /// <summary>The fader under the pointer controls this fixture.</summary>
+    public bool Highlighted { get => _highlighted; set => Set(ref _highlighted, value, nameof(Highlighted)); }
 
     public Visibility ProgrammedVisibility => _programmed ? Visibility.Visible : Visibility.Collapsed;
 
@@ -143,8 +147,27 @@ public partial class FixturesView : ConsoleView
         foreach (var info in snapshot.Fixtures)
             _byId[info.Id].Update(info);
 
+        var marked = HighlightedFixtures(snapshot);
+        foreach (var (id, tile) in _byId)
+            tile.Highlighted = marked.Contains(id);
+
         EmptyHint.Visibility = _tiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         SelectBar.IsEnabled = _tiles.Count > 0;
+    }
+
+    /// <summary>The fixtures of the group or cuelist on the fader under the pointer.</summary>
+    private HashSet<int> HighlightedFixtures(ConsoleSnapshot snapshot)
+    {
+        var fader = Host.Highlight;
+        if (fader is null)
+            return [];
+
+        return fader.Kind switch
+        {
+            Core.Playback.FaderKind.Group => [.. snapshot.Groups.FirstOrDefault(g => g.Number == fader.Target)?.FixtureIds ?? []],
+            Core.Playback.FaderKind.Cuelist => [.. snapshot.Cuelists.FirstOrDefault(l => l.Number == fader.Target)?.FixtureIds ?? []],
+            _ => [],
+        };
     }
 
     private void Tile_Click(object sender, RoutedEventArgs e)
@@ -278,7 +301,8 @@ public partial class FixturesView : ConsoleView
         BuildTabs(available);
 
         var attributes = snapshot.Attributes.Where(a => a.Attribute.Group() == _group).ToList();
-        var signature = _group + "|" + string.Join(',', attributes.Select(a => $"{a.Attribute}:{a.Functions.Count}"));
+        var signature = _group + "|" + string.Join(',', attributes.Select(a => $"{a.Attribute}:{a.Functions.Count}"))
+            + (_group == AttributeGroup.Color ? "|" + string.Join(',', snapshot.Colors.Select(c => c.Name + c.Hex)) : "");
         if (signature != _signature)
         {
             _signature = signature;
@@ -441,32 +465,57 @@ public partial class FixturesView : ConsoleView
         BuildGeneric(attributes);
     }
 
+    /// <summary>Black text on light colours and white text on dark ones, so every swatch name can be read.</summary>
+    public static Brush ReadableOn(Color color)
+    {
+        var luminance = 0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B;
+        return luminance > 125 ? Brushes.Black : Brushes.White;
+    }
+
     private void BuildColor(List<SelectedAttribute> attributes)
     {
         var swatches = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        foreach (var preset in ColorPresets.All)
+        foreach (var preset in Host.Snapshot.Colors)
         {
             var color = (Color)ColorConverter.ConvertFromString(preset.Hex);
-            var luminance = 0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B;
             var button = new Button
             {
-                Content = preset.Name,
+                // The text is a TextBlock of its own: a plain string would take the default text colour of the theme.
+                Content = new TextBlock
+                {
+                    Text = preset.Name,
+                    Foreground = ReadableOn(color),
+                    FontSize = 11.5,
+                    FontWeight = FontWeights.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = TextAlignment.Center,
+                },
                 Width = 88,
-                Height = 40,
+                Height = 44,
                 Margin = new Thickness(0, 0, 4, 4),
                 Padding = new Thickness(2),
-                FontSize = 11,
-                FontWeight = FontWeights.SemiBold,
                 Background = new SolidColorBrush(color),
-                Foreground = luminance > 140 ? Brushes.Black : Brushes.White,
-                BorderBrush = (Brush)FindResource("LineStrongBrush"),
-                ToolTip = $"Color {preset.Name}",
+                BorderBrush = (Brush)FindResource(preset.Custom ? "AmberBrush" : "LineStrongBrush"),
+                ToolTip = preset.Custom ? $"Color {preset.Name} (your own)" : $"Color {preset.Name}",
             };
             System.Windows.Automation.AutomationProperties.SetAutomationId(button, "Color" + preset.Name.Replace(" ", ""));
             var command = preset.Name.Contains(' ') ? $"Color {CommandText.Quote(preset.Name)}" : $"Color {preset.Name}";
             button.Click += (_, _) => Host.Click(command);
             swatches.Children.Add(button);
         }
+
+        var library = new Button
+        {
+            Content = "+ Colours…",
+            Width = 88,
+            Height = 44,
+            Margin = new Thickness(0, 0, 4, 4),
+            FontSize = 11,
+            ToolTip = "Add, import or export your own colours",
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(library, "ColorLibrary");
+        library.Click += (_, _) => new ColorLibraryWindow(Host) { Owner = Window.GetWindow(this) }.ShowDialog();
+        swatches.Children.Add(library);
 
         AttributeBody.Children.Add(swatches);
         BuildGeneric(attributes);

@@ -25,6 +25,8 @@ public sealed class UniversesView : ConsoleView
     private readonly RadioButton _broadcast = new() { Content = "Broadcast (default destination of the Output view)", GroupName = "Dest", Margin = new Thickness(0, 0, 0, 6) };
     private readonly RadioButton _unicast = new() { Content = "Unicast to one node", GroupName = "Dest", Margin = new Thickness(0, 0, 0, 6) };
     private readonly TextBox _node = Ui.Input();
+    private readonly ComboBox _nodePicker = new();
+    private readonly TextBlock _nodeNote = Ui.Text("", "MutedBrush", margin: new Thickness(0, 0, 0, 8));
     private readonly TextBlock _title = Ui.Text("Select a universe", "AmberBrush");
     private readonly StackPanel _editBody = new();
     private int _selected;
@@ -111,6 +113,26 @@ public sealed class UniversesView : ConsoleView
         body.Children.Add(Ui.Caption("Where this universe is sent"));
         body.Children.Add(_broadcast);
         body.Children.Add(_unicast);
+        // The receiver of this universe: pick a node the network search found, or type its address below.
+        var finder = new DockPanel { Margin = new Thickness(0, 4, 0, 6) };
+        var find = Ui.Button("Find nodes", FindNodes, tooltip: "Ask the network which Art-Net nodes are there (ArtPoll)");
+        System.Windows.Automation.AutomationProperties.SetAutomationId(find, "FindNodes");
+        DockPanel.SetDock(find, Dock.Right);
+        find.Margin = new Thickness(6, 0, 0, 0);
+        finder.Children.Add(find);
+        _nodePicker.DisplayMemberPath = "Text";
+        _nodePicker.SelectionChanged += (_, _) =>
+        {
+            if (_nodePicker.SelectedItem is NxDmx.Core.ArtNet.ArtNetNode node && !_loading)
+            {
+                _node.Text = node.Address.ToString();
+                _unicast.IsChecked = true;
+            }
+        };
+        finder.Children.Add(_nodePicker);
+        body.Children.Add(Ui.Caption("Receiver (Art-Net node)"));
+        body.Children.Add(finder);
+        body.Children.Add(_nodeNote);
         body.Children.Add(Ui.Field("Node IP address (unicast)", _node, margin: new Thickness(0, 4, 0, 14)));
         body.Children.Add(Ui.Text("Art-Net Port-Address on the wire = universe number − 1. Set the same on your node.", "MutedBrush", margin: new Thickness(0, 0, 0, 14)));
         var apply = Ui.Button("Apply", Apply, "GreenButton", "Universe n Label … Unicast … On/Off");
@@ -197,7 +219,36 @@ public sealed class UniversesView : ConsoleView
             _broadcast.IsChecked = true;
 
         _node.IsEnabled = info.Destination == UniverseDestination.Unicast;
+        ShowNodes();
         Tick();
+    }
+
+    /// <summary>Searches the network for Art-Net nodes and offers them as receivers. Every universe can pick a different one.</summary>
+    private async void FindNodes()
+    {
+        _nodeNote.Text = "Searching for nodes…";
+        _nodeNote.Foreground = Ui.Brush("DimBrush");
+        var error = await Host.FindNodesAsync();
+        ShowNodes();
+        if (error is not null)
+        {
+            _nodeNote.Text = error;
+            _nodeNote.Foreground = Ui.Brush("RedBrush");
+        }
+        else
+        {
+            _nodeNote.Text = Host.Nodes.Count == 0
+                ? "No node answered. Check the network adapter in Output, or type the address of the node below."
+                : $"{Host.Nodes.Count} node{(Host.Nodes.Count == 1 ? "" : "s")} found. Pick one to send this universe to it.";
+        }
+    }
+
+    private void ShowNodes()
+    {
+        _loading = true;
+        _nodePicker.ItemsSource = Host.Nodes;
+        _nodePicker.SelectedItem = Host.Nodes.FirstOrDefault(n => n.Address.ToString() == _node.Text.Trim());
+        _loading = false;
     }
 
     private void CreateUniverse()
@@ -247,9 +298,7 @@ public sealed class UniversesView : ConsoleView
         if (_selected == 0)
             return;
 
-        var answer = MessageBox.Show(Window.GetWindow(this), $"Delete universe {_selected}?\n\nOops can take this back.",
-            "Delete universe", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
-        if (answer == MessageBoxResult.OK)
+        if (Services.ShowDialogs.ConfirmDelete(Host, Window.GetWindow(this)!, $"Delete universe {_selected}?\n\nOops can take this back.", "Delete universe"))
             Host.Run($"Delete Universe {_selected}");
     }
 }

@@ -60,6 +60,11 @@
                                                     <Setter Property="BorderBrush" Value="{StaticResource AmberBrush}"/>
                                                     <Setter Property="BorderThickness" Value="2"/>
                                                 </DataTrigger>
+                                                <DataTrigger Binding="{Binding Highlighted}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="{StaticResource BlueBrush}"/>
+                                                    <Setter Property="Background" Value="{StaticResource BlueDimBrush}"/>
+                                                    <Setter Property="BorderThickness" Value="2"/>
+                                                </DataTrigger>
                                                 <MultiDataTrigger>
                                                     <MultiDataTrigger.Conditions>
                                                         <Condition Binding="{Binding Selected}" Value="False"/>

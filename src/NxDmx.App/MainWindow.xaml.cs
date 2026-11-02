@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using NxDmx.App.Controls;
 using NxDmx.App.Services;
 using NxDmx.App.Views;
 using Velopack;
@@ -32,6 +33,7 @@ public partial class MainWindow : Window
         ("Output", "Output"),
         ("Remote", "Remote Control"),
         ("Show", "Show"),
+        ("Settings", "Settings"),
     ];
 
     public MainWindow()
@@ -41,9 +43,12 @@ public partial class MainWindow : Window
         _host = new ConsoleHost(Dispatcher);
         Info.Attach(_host);
         CommandBar.Attach(_host, _host.Settings.KeypadVisible);
-        CommandBar.KeypadToggled += SetKeypadVisible;
+        CommandBar.KeypadToggled += visible => { _host.Settings.KeypadVisible = visible; _host.SaveSettings(); };
+        CommandBar.FadersToggled += visible => _host.SetFaderBar(visible, _host.Settings.FadersPopped);
         Pad.Attach(_host);
-        SetKeypadVisible(_host.Settings.KeypadVisible);
+        _host.SettingsChanged += ApplySettings;
+        _host.FaderLayoutChanged += ApplyFaderLayout;
+        _host.HighlightChanged += OnHighlight;
 
         MasterBar.Committed += percent => _host.Run($"Master At {percent}");
         _host.StateChanged += OnStateChanged;
@@ -63,6 +68,93 @@ public partial class MainWindow : Window
 
         UpdateHeader();
         OnStateChanged();
+        ApplySettings();
+        ApplyFaderLayout();
+        SizeChanged += (_, _) => UpdateBottomLayout();
+    }
+
+    // ---- settings, scale, fader bar --------------------------------------------------------------------------
+
+    private FaderBar? _dockedFaders;
+    private FaderWindow? _faderWindow;
+    private bool _lastDocked;
+
+    /// <summary>Applies the interface size and the keypad; called at start and whenever a setting changed.</summary>
+    private void ApplySettings()
+    {
+        var scale = Math.Clamp(_host.Settings.UiScalePercent, 100, 200) / 100.0;
+        Shell.LayoutTransform = scale == 1 ? Transform.Identity : new ScaleTransform(scale, scale);
+        CommandBar.SetKeypadChecked(_host.Settings.KeypadVisible);
+        UpdateBottomLayout();
+    }
+
+    /// <summary>
+    /// Fits the bottom area: the keypad hides itself when keypad and docked faders would leave no room for the
+    /// programmer table, and the command line moves above everything while the fader bar is docked.
+    /// </summary>
+    private void UpdateBottomLayout()
+    {
+        var scale = Math.Clamp(_host.Settings.UiScalePercent, 100, 200) / 100.0;
+        var width = ActualWidth / scale;
+        var fadersDocked = _host.Settings.FaderBarVisible && !_host.Settings.FadersPopped;
+        var room = width - 78 - (fadersDocked ? 560 : 0);
+        Pad.Visibility = _host.Settings.KeypadVisible && room >= 560 + 300 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Shows the fader bar docked or in its own window, and moves the command line over it when docked.</summary>
+    private void ApplyFaderLayout()
+    {
+        var visible = _host.Settings.FaderBarVisible;
+        var popped = _host.Settings.FadersPopped;
+        var docked = visible && !popped;
+
+        if (docked)
+        {
+            _dockedFaders ??= new FaderBar(_host, popped: false);
+            FaderHost.Child = _dockedFaders;
+        }
+        else
+        {
+            FaderHost.Child = null;
+        }
+
+        FaderHost.Visibility = docked ? Visibility.Visible : Visibility.Collapsed;
+        CommandBar.SetFadersChecked(visible);
+
+        // Docked faders: the command line spans fader bar, programmer table and keypad above them.
+        Grid.SetRow(CommandBar, docked ? 0 : 2);
+        Grid.SetColumn(CommandBar, docked ? 0 : 1);
+        Grid.SetColumnSpan(CommandBar, docked ? 3 : 1);
+        BottomRow.MaxHeight = docked ? 376 : 330;
+        if (docked != _lastDocked)
+        {
+            BottomRow.Height = new GridLength(docked ? 260 : 214);
+            _lastDocked = docked;
+        }
+
+        if (visible && popped)
+        {
+            if (_faderWindow is null)
+            {
+                _faderWindow = new FaderWindow(_host) { Owner = this };
+                _faderWindow.Closed += (_, _) => _faderWindow = null;
+                _faderWindow.Show();
+            }
+        }
+        else
+        {
+            _faderWindow?.Close();
+        }
+
+        UpdateBottomLayout();
+    }
+
+    /// <summary>What the fader under the pointer controls is named in the header; the views mark it themselves.</summary>
+    private void OnHighlight()
+    {
+        var fader = _host.Highlight;
+        HighlightText.Text = fader is null ? "" : $"FADER {fader.Number}  →  {fader.Text}";
+        _views.GetValueOrDefault(_currentView)?.Refresh();
     }
 
     // ---- window ----------------------------------------------------------------------------------------------
@@ -84,10 +176,11 @@ public partial class MainWindow : Window
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        var start = Views.Any(v => v.Key == _host.Settings.LastView) ? _host.Settings.LastView : "Fixtures";
+        var start = _host.Settings.RememberView && Views.Any(v => v.Key == _host.Settings.LastView) ? _host.Settings.LastView : "Fixtures";
         Select(start);
         CommandBar.FocusLine();
-        await CheckForUpdatesAsync(manual: false);
+        if (_host.Settings.CheckUpdatesOnStart)
+            await CheckForUpdatesAsync(manual: false);
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -98,6 +191,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        FaderWindow.AppClosing = true;
         _tick.Stop();
         _host.Settings.LastView = _currentView;
         _host.Dispose();
@@ -154,6 +248,9 @@ public partial class MainWindow : Window
             case Key.N:
                 ShowDialogs.New(_host, this);
                 break;
+            case Key.D0:
+                Select("Settings");
+                break;
             case >= Key.D1 and <= Key.D9:
                 Select(Views[e.Key - Key.D1].Key);
                 break;
@@ -174,7 +271,7 @@ public partial class MainWindow : Window
 
     private void Select(string key)
     {
-        var button = new[] { NavFixtures, NavGroups, NavCuelists, NavPatch, NavProfiles, NavUniverses, NavOutput, NavRemote, NavShow }
+        var button = new[] { NavFixtures, NavGroups, NavCuelists, NavPatch, NavProfiles, NavUniverses, NavOutput, NavRemote, NavShow, NavSettings }
             .FirstOrDefault(b => b.Uid == key);
         if (button is null)
             return;
@@ -213,6 +310,7 @@ public partial class MainWindow : Window
         "Output" => new OutputView(_host),
         "Remote" => new RemoteView(_host),
         "Show" => new ShowView(_host),
+        "Settings" => new SettingsView(_host),
         _ => throw new ArgumentException("Unknown view " + key),
     };
 
@@ -223,16 +321,11 @@ public partial class MainWindow : Window
         BlackoutButton.IsChecked = _host.Snapshot.Blackout;
     }
 
-    private void SetKeypadVisible(bool visible)
-    {
-        Pad.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        _host.Settings.KeypadVisible = visible;
-    }
-
     private void Blackout_Click(object sender, RoutedEventArgs e) => _host.Run("Blackout");
 
     /// <summary>Double-click on the splitter puts the bottom area back to its normal height.</summary>
-    private void Splitter_DoubleClick(object sender, MouseButtonEventArgs e) => BottomRow.Height = new GridLength(214);
+    private void Splitter_DoubleClick(object sender, MouseButtonEventArgs e) =>
+        BottomRow.Height = new GridLength(_host.Settings.FaderBarVisible && !_host.Settings.FadersPopped ? 260 : 214);
 
     // ---- header ----------------------------------------------------------------------------------------------
 

@@ -51,6 +51,15 @@ internal static class Tokenizer
                 tokens.Add(new Token(TokenKind.Minus, "-"));
                 i++;
             }
+            else if (c == '#')
+            {
+                // #FF8800: a colour typed as hex is one word.
+                var start = i++;
+                while (i < line.Length && char.IsAsciiLetterOrDigit(line[i]))
+                    i++;
+
+                tokens.Add(new Token(TokenKind.Word, line[start..i].ToLowerInvariant()));
+            }
             else if (c == '@')
             {
                 tokens.Add(new Token(TokenKind.Word, "at"));

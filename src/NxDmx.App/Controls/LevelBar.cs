@@ -37,7 +37,7 @@ public sealed class LevelBar : FrameworkElement
     {
         Cursor = Cursors.Hand;
         Focusable = false;
-        Height = 34;
+        Height = 40;
         MinWidth = 60;
         ClipToBounds = true;
     }

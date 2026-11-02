@@ -264,6 +264,97 @@ public sealed class ConsoleHost : IDisposable
         return last;
     }
 
+    /// <summary>
+    /// Runs a live command without logging it or refreshing at once: for faders that are being dragged, where a command
+    /// every few milliseconds would flood the log. The views still follow through the queued refresh.
+    /// </summary>
+    public void RunQuiet(string line) => Console.Execute(line);
+
+    /// <summary>A setting changed (from the settings page or a button elsewhere): the window re-applies size, keypad and fader bar.</summary>
+    public event Action? SettingsChanged;
+
+    /// <summary>Stores the settings and tells the window to apply them.</summary>
+    public void SaveSettings()
+    {
+        Settings.Save();
+        SettingsChanged?.Invoke();
+    }
+
+    // ---- faders and highlight --------------------------------------------------------------------------------
+
+    /// <summary>What the fader under the pointer controls; views mark it, so the operator sees what is on a fader.</summary>
+    public FaderInfo? Highlight { get; private set; }
+
+    public event Action? HighlightChanged;
+
+    public void SetHighlight(FaderInfo? fader)
+    {
+        var next = fader is { IsAssigned: true } ? fader : null;
+        if (Highlight == next)
+            return;
+
+        Highlight = next;
+        HighlightChanged?.Invoke();
+    }
+
+    /// <summary>Page of the fader bar (8 faders each). Shared by the docked bar and the pop-up window.</summary>
+    public int FaderPage
+    {
+        get => Math.Clamp(Settings.FaderPage, 1, FaderPages);
+        set
+        {
+            Settings.FaderPage = Math.Clamp(value, 1, FaderPages);
+            FaderLayoutChanged?.Invoke();
+        }
+    }
+
+    public const int FadersPerPage = 8;
+
+    public static int FaderPages => NxDmx.Core.Playback.FaderConfig.MaxFaders / FadersPerPage;
+
+    /// <summary>The fader bar was shown, hidden, popped out or docked, or its page changed.</summary>
+    public event Action? FaderLayoutChanged;
+
+    public void SetFaderBar(bool visible, bool popped)
+    {
+        Settings.FaderBarVisible = visible;
+        Settings.FadersPopped = popped;
+        Settings.Save();
+        FaderLayoutChanged?.Invoke();
+    }
+
+    // ---- Art-Net nodes ---------------------------------------------------------------------------------------
+
+    /// <summary>The Art-Net nodes found by the last search, for choosing the receiver of a universe.</summary>
+    public IReadOnlyList<NxDmx.Core.ArtNet.ArtNetNode> Nodes { get; private set; } = [];
+
+    public event Action? NodesChanged;
+
+    /// <summary>
+    /// Polls the network for Art-Net nodes (two seconds). Returns an error text, or null when the search ran, with or
+    /// without finding anything. The result is kept in <see cref="Nodes"/>.
+    /// </summary>
+    public async Task<string?> FindNodesAsync()
+    {
+        try
+        {
+            var target = IPAddress.TryParse(Settings.BroadcastAddress.Trim(), out var parsed) ? parsed : IPAddress.Broadcast;
+            IPAddress? local = IPAddress.TryParse(Settings.LocalAddress.Trim(), out var adapter) ? adapter : null;
+            Nodes = await NxDmx.Core.ArtNet.ArtNetDiscovery.DiscoverAsync(target, local, TimeSpan.FromSeconds(2));
+            NodesChanged?.Invoke();
+            AddLog(Nodes.Count == 0 ? "No Art-Net nodes answered." : $"Found {Nodes.Count} Art-Net node{(Nodes.Count == 1 ? "" : "s")}: {string.Join(", ", Nodes.Select(n => n.Text))}");
+            return null;
+        }
+        catch (SocketException ex)
+        {
+            var message = ex.SocketErrorCode is SocketError.AddressAlreadyInUse or SocketError.AccessDenied
+                ? "Another program is using the Art-Net port 6454 exclusively. Close it to search for nodes."
+                : $"The search failed: {ex.Message}";
+            AddLog(message, error: true);
+            return message;
+        }
+    }
+
     /// <summary>The answer to the last command typed or clicked.</summary>
     public (string Text, bool IsError) Feedback { get; private set; } = ("", false);
 

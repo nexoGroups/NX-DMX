@@ -111,7 +111,7 @@ public sealed class PatchView : ConsoleView
     {
         _grid.Columns.Add(new DataGridTextColumn { Header = "NO", Binding = new Binding("Id"), Width = 56 });
         _grid.Columns.Add(new DataGridTextColumn { Header = "LABEL", Binding = new Binding("Label"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), MinWidth = 120 });
-        _grid.Columns.Add(new DataGridTextColumn { Header = "PROFILE", Binding = new Binding("Type"), Width = 140 });
+        _grid.Columns.Add(new DataGridTextColumn { Header = "PROFILE", Binding = new Binding("Type"), Width = 190 });
         _grid.Columns.Add(new DataGridTextColumn { Header = "UNIVERSE", Binding = new Binding("Universe"), Width = 86, ElementStyle = Ui.Style("RightCell") });
         _grid.Columns.Add(new DataGridTextColumn { Header = "ADDRESS", Binding = new Binding("Address"), Width = 86, ElementStyle = Ui.Style("RightCell") });
         _grid.Columns.Add(new DataGridTextColumn { Header = "TO", Binding = new Binding("End"), Width = 64, ElementStyle = Ui.Style("RightCell") });
@@ -201,7 +201,7 @@ public sealed class PatchView : ConsoleView
             _profileSignature = profileSignature;
             var selectedName = (_profile.SelectedItem as TypeChoice)?.Name;
             var retypeName = (_retype.SelectedItem as TypeChoice)?.Name;
-            var choices = snapshot.Profiles.Select(p => new TypeChoice(p.Type.Name, p.Type.Footprint, $"{p.Type.Name} · {p.Type.Footprint} ch")).ToList();
+            var choices = snapshot.Profiles.Select(p => new TypeChoice(p.Type.Name, p.Type.Footprint, $"{p.Type.DisplayName} · {p.Type.Footprint} ch")).ToList();
             _loading = true;
             _profile.ItemsSource = choices;
             _retype.ItemsSource = choices.ToList();
@@ -211,7 +211,7 @@ public sealed class PatchView : ConsoleView
         }
 
         var rows = snapshot.Fixtures
-            .Select(f => new PatchRow(f.Id, f.Label, f.TypeName, f.Universe, f.Address, f.EndAddress, f.Footprint, f.Conflict ? "CONFLICT" : "", f.Conflict))
+            .Select(f => new PatchRow(f.Id, f.Label, f.TypeDisplay, f.Universe, f.Address, f.EndAddress, f.Footprint, f.Conflict ? "CONFLICT" : "", f.Conflict))
             .ToList();
         var signature = string.Join('|', rows);
         if (signature != _signature)
@@ -454,10 +454,8 @@ public sealed class PatchView : ConsoleView
         if (ids.Count == 0)
             return;
 
-        var answer = MessageBox.Show(Window.GetWindow(this),
-            $"Delete {ids.Count} fixture{(ids.Count == 1 ? "" : "s")} from the patch?\n\nFixture {SelectionFormatter.Format(ids)}\n\nOops can take this back.",
-            "Delete fixtures", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
-        if (answer == MessageBoxResult.OK)
+        if (Services.ShowDialogs.ConfirmDelete(Host, Window.GetWindow(this)!,
+                $"Delete {ids.Count} fixture{(ids.Count == 1 ? "" : "s")} from the patch?\n\nFixture {SelectionFormatter.Format(ids)}\n\nOops can take this back.", "Delete fixtures"))
             Host.Run(string.Join("; ", Runs(ids).Select(run => $"Delete Fixture {Range(run)}")));
     }
 }

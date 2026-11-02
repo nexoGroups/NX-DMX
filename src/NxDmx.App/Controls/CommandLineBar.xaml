@@ -31,6 +31,8 @@
             </StackPanel>
 
             <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                <ToggleButton x:Name="FadersToggle" Style="{StaticResource Chip}" Content="FADERS" Focusable="False" Margin="0,0,6,0"
+                              ToolTip="Show or hide the fader bar" Click="FadersToggle_Click" AutomationProperties.AutomationId="FadersToggle"/>
                 <ToggleButton x:Name="KeypadToggle" Style="{StaticResource Chip}" Content="KEYS" Focusable="False" Margin="0,0,6,0"
                               ToolTip="Show or hide the keypad" Click="KeypadToggle_Click"/>
                 <Button Content="Oops" Style="{StaticResource KeyAccent}" Focusable="False" Width="58" MinHeight="30" Margin="0,0,6,0"

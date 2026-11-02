@@ -38,6 +38,8 @@ public sealed partial class CommandInterpreter(Show show, Programmer programmer,
         Delete      Delete Cue 1 [Cuelist 2] | Delete Group 3 | Delete Cuelist 2 | Delete Fixture 1 Thru 5 | Delete Universe 3
         Label       Label Group 3 "Front" | Label Cue 1 "Intro" | Label Fixture 5 "Spot L" | Label Universe 2 "FOH"
         Playback    Go | Go - | Back | Goto Cue 5 | Off | Toggle   (add Cuelist n for another cuelist)
+        Faders      Fader 3 At 60 | Fader 3 Button | Fader 3 Cuelist 2 | Fader 3 Group 1 | Fader 3 Master | Fader 3 Clear
+                    Fader 3 Label "Front" | Fader 3 Color #FF8800 (or a colour name)
         Output      Blackout [On|Off] | Master At 80
         Patch       Patch Fixture 1 Thru 8 Type RGBDim At 1.1 [Label "Wash"]   (universe.address, or an absolute address)
                     Patch Fixture 5 At 2.1 moves, Patch Fixture 5 Type RGB changes the profile of existing fixtures
@@ -73,7 +75,7 @@ public sealed partial class CommandInterpreter(Show show, Programmer programmer,
                 return Oops();
             }
 
-            if (head is not null && LiveCommands.Contains(head))
+            if (head is not null && (LiveCommands.Contains(head) || IsLiveFaderCommand(head, tokenList)))
                 return Run(tokens);
 
             before = ShowSnapshot.Capture(show, programmer);
@@ -147,6 +149,7 @@ public sealed partial class CommandInterpreter(Show show, Programmer programmer,
             "blackout" => Blackout(t),
             "master" => Master(t),
             "color" => ApplyColor(t),
+            "fader" => FaderCommand(t),
             "universe" => UniverseCommand(t),
             "patch" => PatchFixtures(t),
             "clear" => Clear(t, everything: false),

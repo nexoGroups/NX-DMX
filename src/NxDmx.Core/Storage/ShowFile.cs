@@ -35,6 +35,8 @@ public static class ShowFile
         public List<FixtureData> Fixtures { get; set; } = [];
         public List<GroupData> Groups { get; set; } = [];
         public List<CuelistData> Cuelists { get; set; } = [];
+        public List<FaderData> Faders { get; set; } = [];
+        public List<ColorFile.ColorData> Colors { get; set; } = [];
     }
 
     private sealed class UniverseData
@@ -44,6 +46,15 @@ public static class ShowFile
         public bool Enabled { get; set; } = true;
         public string Destination { get; set; } = nameof(UniverseDestination.Broadcast);
         public string UnicastAddress { get; set; } = "";
+    }
+
+    private sealed class FaderData
+    {
+        public int Number { get; set; }
+        public string Kind { get; set; } = "";
+        public int Target { get; set; }
+        public string Label { get; set; } = "";
+        public string Color { get; set; } = "";
     }
 
     private sealed class FixtureData
@@ -114,6 +125,10 @@ public static class ShowFile
             Groups = show.Groups.Values
                 .Select(g => new GroupData { Number = g.Number, Label = g.Label, Fixtures = [.. g.FixtureIds] })
                 .ToList(),
+            Faders = show.Faders.Values
+                .Select(x => new FaderData { Number = x.Number, Kind = x.Kind.ToString(), Target = x.Target, Label = x.Label, Color = x.Color })
+                .ToList(),
+            Colors = ColorFile.ToData(show.CustomColors.Values.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)),
             Cuelists = show.Cuelists.Values
                 .Select(l => new CuelistData
                 {
@@ -236,6 +251,28 @@ public static class ShowFile
             }
 
             show.Cuelists[l.Number] = cuelist;
+        }
+
+        foreach (var x in data.Faders ?? [])
+        {
+            if (x.Number is < 1 or > FaderConfig.MaxFaders || show.Faders.ContainsKey(x.Number))
+                throw new ShowFileException($"Fader number {x.Number} is invalid or appears twice.");
+            if (!Enum.TryParse<FaderKind>(x.Kind, out var kind) || !Enum.IsDefined(kind))
+                throw new ShowFileException($"Fader {x.Number} has the unknown kind '{x.Kind}'.");
+            if (x.Color is { Length: > 0 } && !ColorPreset.TryParseHex(x.Color, out _, out _, out _))
+                throw new ShowFileException($"Fader {x.Number} has the invalid colour '{x.Color}'.");
+
+            if (kind != FaderKind.None)
+                show.Faders[x.Number] = new FaderConfig(x.Number) { Kind = kind, Target = x.Target, Label = x.Label ?? "", Color = x.Color ?? "" };
+        }
+
+        foreach (var c in data.Colors ?? [])
+        {
+            var color = ColorPreset.FromHex(c.Name ?? "", c.Hex ?? "");
+            if (color is null || color.Name.Length is 0 or > 40 || color.Name.Contains('"'))
+                throw new ShowFileException($"The colour \"{c.Name}\" ('{c.Hex}') is not valid.");
+
+            show.CustomColors[color.Name] = color;
         }
 
         return show;

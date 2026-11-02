@@ -77,11 +77,21 @@ public sealed class LightingConsole
         return result;
     }
 
-    public CommandResult DeleteProfile(string name)
+    public CommandResult DeleteProfile(string name) => Locked(() => _interpreter.DeleteProfile(name));
+
+    /// <summary>Adds or replaces one of the show's own colours (<paramref name="hex"/> is <c>#RRGGBB</c>).</summary>
+    public CommandResult SaveColor(string name, string hex) => Locked(() => _interpreter.SaveColor(name, hex));
+
+    public CommandResult DeleteColor(string name) => Locked(() => _interpreter.DeleteColor(name));
+
+    /// <summary>Adds many colours at once; one Oops takes the whole import back.</summary>
+    public CommandResult ImportColors(IReadOnlyList<(string Name, string Hex)> colors) => Locked(() => _interpreter.ImportColors(colors));
+
+    private CommandResult Locked(Func<CommandResult> action)
     {
         CommandResult result;
         lock (_gate)
-            result = _interpreter.DeleteProfile(name);
+            result = action();
 
         Changed?.Invoke();
         return result;

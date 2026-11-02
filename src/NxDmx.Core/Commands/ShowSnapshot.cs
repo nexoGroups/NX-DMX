@@ -21,6 +21,8 @@ internal sealed class ShowSnapshot
     private sealed record CuelistData(int Number, string Label, List<CueData> Cues, decimal? Current);
 
     private readonly List<UniverseConfig> _universes;
+    private readonly List<FaderConfig> _faders;
+    private readonly List<ColorPreset> _colors;
     private readonly List<FixtureType> _customTypes;
     private readonly List<FixtureData> _fixtures;
     private readonly List<GroupData> _groups;
@@ -31,6 +33,8 @@ internal sealed class ShowSnapshot
     private ShowSnapshot(Show show, Programmer programmer)
     {
         _universes = show.Universes.Values.Select(u => u.Clone()).ToList();
+        _faders = show.Faders.Values.Select(x => x.Clone()).ToList();
+        _colors = [.. show.CustomColors.Values];
         _customTypes = [.. show.CustomTypes.Values];
         _fixtures = show.Patch.Fixtures
             .Select(f => new FixtureData(f.Id, f.Type, f.Universe, f.Address, f.Label))
@@ -58,6 +62,14 @@ internal sealed class ShowSnapshot
         show.Universes.Clear();
         foreach (var u in _universes)
             show.Universes[u.Number] = u.Clone();
+
+        show.Faders.Clear();
+        foreach (var x in _faders)
+            show.Faders[x.Number] = x.Clone();
+
+        show.CustomColors.Clear();
+        foreach (var c in _colors)
+            show.CustomColors[c.Name] = c;
 
         show.CustomTypes.Clear();
         foreach (var type in _customTypes)

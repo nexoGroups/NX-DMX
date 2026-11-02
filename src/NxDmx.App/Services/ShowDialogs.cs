@@ -87,6 +87,11 @@ public static class ShowDialogs
         };
     }
 
+    /// <summary>Asks before something is deleted, unless the operator turned the question off in the settings.</summary>
+    public static bool ConfirmDelete(ConsoleHost host, Window owner, string text, string title) =>
+        !host.Settings.ConfirmDeletes
+        || MessageBox.Show(owner, text, title, MessageBoxButton.OKCancel, MessageBoxImage.Warning) == MessageBoxResult.OK;
+
     private static string EnsureShowsFolder()
     {
         try

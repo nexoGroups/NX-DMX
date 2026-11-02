@@ -15,7 +15,11 @@ namespace NxDmx.App.Views;
 /// </summary>
 public partial class ProfilesView : ConsoleView
 {
-    private sealed record ProfileItem(string Name, string Info, FixtureType Type);
+    private sealed record ProfileItem(string Name, string Info, FixtureType Type)
+    {
+        /// <summary>The name in the list: built-in profiles carry the mark (PreBuild).</summary>
+        public string Display => Type.DisplayName;
+    }
 
     private const string FileFilter = "NX-DMX fixture profile (*.nxfixture)|*.nxfixture|All files (*.*)|*.*";
 
@@ -124,9 +128,7 @@ public partial class ProfilesView : ConsoleView
         if (ProfileList.SelectedItem is not ProfileItem { Type.IsBuiltIn: false } item)
             return;
 
-        var answer = MessageBox.Show(Window.GetWindow(this), $"Delete the profile \"{item.Name}\"?\n\nOops can take this back.", "Fixture Manager",
-            MessageBoxButton.OKCancel, MessageBoxImage.Warning);
-        if (answer != MessageBoxResult.OK)
+        if (!Services.ShowDialogs.ConfirmDelete(Host, Window.GetWindow(this)!, $"Delete the profile \"{item.Name}\"?\n\nOops can take this back.", "Fixture Manager"))
             return;
 
         var result = Host.Console.DeleteProfile(item.Name);

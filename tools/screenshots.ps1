@@ -63,7 +63,7 @@ function Command($root, $line) {
 
 $data = Join-Path ([IO.Path]::GetTempPath()) ('nxdmx-shots-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force $data | Out-Null
-'{ "BroadcastAddress": "127.0.0.1", "HttpPort": 18765, "OscPort": 18000, "TextPort": 17000 }' | Set-Content -Encoding UTF8 (Join-Path $data 'settings.json')
+'{ "BroadcastAddress": "127.0.0.1", "HttpPort": 18765, "OscPort": 18000, "TextPort": 17000, "FaderBarVisible": true }' | Set-Content -Encoding UTF8 (Join-Path $data 'settings.json')
 $env:NXDMX_DATA = $data
 
 # Something has to listen on the Art-Net port, otherwise Windows reports the loopback sends as failed.
@@ -91,6 +91,8 @@ try {
             'Group 2', 'At 100', 'Color Blue', 'Pan At 30', 'Tilt At 65',
             'Record Cue 2 "Blue Movers"',
             'ClearAll', 'Go Cuelist 1', 'Go Cuelist 1',
+            'Fader 1 Cuelist 1', 'Fader 1 Label "Looks"', 'Fader 2 Group 1', 'Fader 2 Color Blue', 'Fader 3 Group 2', 'Fader 3 Color Orange', 'Fader 4 Master',
+            'Fader 1 At 100', 'Fader 2 At 70', 'Fader 3 At 40',
             'Fixture 3 Thru 5', 'At 100')) {
         Command $root $line
     }

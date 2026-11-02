@@ -117,8 +117,8 @@ public sealed partial class CommandInterpreter
         var name = t.AcceptName() ?? throw new CommandException("Color name expected, e.g. Color Red");
         t.ExpectEnd();
 
-        var preset = ColorPresets.Find(name)
-            ?? throw new CommandException($"Unknown color '{name}'. Available: {string.Join(", ", ColorPresets.All.Select(c => c.Name))}");
+        var preset = FindColorOrHex(name)
+            ?? throw new CommandException($"Unknown color '{name}'. Available: {string.Join(", ", show.AllColors.Select(c => c.Name))}. A hex colour also works: Color #FF8800");
         if (programmer.Selection.Count == 0)
             throw new CommandException("Nothing selected. Select fixtures first, e.g. Fixture 1 Thru 5");
 

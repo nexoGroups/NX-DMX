@@ -3,8 +3,25 @@ using NxDmx.Core.Fixtures;
 namespace NxDmx.Core.Programming;
 
 /// <summary>A named colour as red/green/blue amounts (0..1) with the extra emitters some fixtures have.</summary>
-public sealed record ColorPreset(string Name, double Red, double Green, double Blue, double White = 0, double Amber = 0)
+public sealed record ColorPreset(string Name, double Red, double Green, double Blue, double White = 0, double Amber = 0, bool Custom = false)
 {
+    /// <summary>Parses <c>#RRGGBB</c> (the # is optional). False when the text is not a six-digit hex colour.</summary>
+    public static bool TryParseHex(string text, out double red, out double green, out double blue)
+    {
+        red = green = blue = 0;
+        var hex = text.Trim().TrimStart('#');
+        if (hex.Length != 6 || !hex.All(Uri.IsHexDigit))
+            return false;
+
+        red = Convert.ToInt32(hex[..2], 16) / 255.0;
+        green = Convert.ToInt32(hex[2..4], 16) / 255.0;
+        blue = Convert.ToInt32(hex[4..], 16) / 255.0;
+        return true;
+    }
+
+    public static ColorPreset? FromHex(string name, string hex) =>
+        TryParseHex(hex, out var r, out var g, out var b) ? new ColorPreset(name.Trim(), r, g, b, Custom: true) : null;
+
     /// <summary>For drawing a swatch of the colour on screen.</summary>
     public string Hex => $"#{(int)Math.Round(Red * 255):X2}{(int)Math.Round(Green * 255):X2}{(int)Math.Round(Blue * 255):X2}";
 

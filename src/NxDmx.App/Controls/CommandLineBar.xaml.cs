@@ -19,6 +19,19 @@ public partial class CommandLineBar : UserControl
     /// <summary>Raised when the keypad button is pressed.</summary>
     public event Action<bool>? KeypadToggled;
 
+    /// <summary>Raised when the FADERS button is pressed.</summary>
+    public event Action<bool>? FadersToggled;
+
+    public void SetKeypadChecked(bool visible) => KeypadToggle.IsChecked = visible;
+
+    public void SetFadersChecked(bool visible) => FadersToggle.IsChecked = visible;
+
+    private void FadersToggle_Click(object sender, RoutedEventArgs e)
+    {
+        FadersToggled?.Invoke(FadersToggle.IsChecked == true);
+        FocusLine();
+    }
+
     public void Attach(ConsoleHost host, bool keypadVisible)
     {
         _host = host;

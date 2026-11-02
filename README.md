@@ -53,6 +53,10 @@ Log, und alles, was du tippen kannst, kannst du auch von einem Stream-Deck-Knopf
 - **Programmer-Tabelle** (rot = im Programmer gesetzt), Befehls-Log, Hilfe
 - **Cuelists mit Tracking**, mehrere gleichzeitig, mit Go, Back, Off und Toggle je Cuelist
 - **Master und Blackout** immer sichtbar in der Kopfzeile
+- **Fader-Leiste** wie bei der grandMA3: acht Fader pro Seite (5 Seiten) für Cuelists, Gruppen-Submaster und den Master, jeder mit eigener Farbe. Fährst du über einen Fader, wird oben markiert, was darauf liegt. Die Leiste lässt sich in ein eigenes Fenster auslagern
+- **Eigene Farben** anlegen, importieren und exportieren, helle Farbfelder mit schwarzer Schrift
+- **Einstellungsseite** (Klick auf das NX): Start mit Windows (standardmäßig aus), Oberflächengröße für Touch-Bedienung und mehr
+- **Art-Net-Empfänger pro Universum** wählbar, mit Suche nach Nodes im Netz (ArtPoll)
 - **Fernsteuerung** per HTTP, OSC und Textport für Bitfocus Companion und Stream Deck
 - **Art-Net 4** (ArtDmx, UDP Port 6454) mit 40 Hz, bis zu 32768 Universen
 - **Shows speichern und laden** (`.nxshow`), dazu eine automatische Sicherung nach jeder Änderung
@@ -150,6 +154,11 @@ Mit `Help` (oder dem Reiter HELP unten) listet die Software alle Befehle auf.
 | `Go`, `Go -`, `Back`, `Goto Cue 5`, `Off`, `Toggle` | Playback, mit `Cuelist 2` hinten für eine andere Cuelist |
 | `Blackout`, `Blackout On`, `Blackout Off` | Alle Intensitäten aus (ohne `On`/`Off` wechselt es) |
 | `Master At 80` | Grand Master in Prozent |
+| `Color #FF8800` | Eine Farbe als Hex-Wert, ohne sie zu speichern |
+| `Fader 3 At 60` | Fader 3 bewegen (Cuelist: ab 1 % Go, bei 0 Off. Gruppe: Submaster. Master: Grand Master) |
+| `Fader 3 Button` | Die Taste über dem Fader (Cuelist: nächster Cue, Gruppe: aus/voll, Master: Blackout) |
+| `Fader 3 Cuelist 2`, `Fader 3 Group 1`, `Fader 3 Master`, `Fader 3 Clear` | Belegung eines Faders |
+| `Fader 3 Label "Front"`, `Fader 3 Color #FF8800` | Name und Farbe eines Faders (`Color Default` setzt die Standardfarbe zurück) |
 | `Patch Fixture 1 Thru 8 Type RGBDim At 1.1` | Fixtures anlegen: Profil und Adresse als `Universum.Adresse` |
 | `Patch Fixture 5 At 2.1` | Vorhandene Fixture verschieben (ohne `Type`) |
 | `Patch Fixture 5 Type RGB` | Profil einer vorhandenen Fixture ändern (ohne `At`) |
@@ -192,7 +201,7 @@ Der Bereich **Profiles** ist ein eigener Editor für Fixture-Profile:
   Prisma, Gobo, Gobo-Rotation, Strobe, Speed, Control, Custom), optional ein **16-Bit-Feinkanal** und der **Standardwert**.
 - Pro Kanal **Funktionen mit DMX-Bereichen** von 0 bis 255, etwa „Open 0–7“, „Gobo 1 8–15“. In der Fixture-Ansicht wird
   jede Funktion zu einem Knopf.
-- Eingebaute Profile sind schreibgeschützt: mit **Copy** machst du eine bearbeitbare Kopie. Ungültige Eingaben (doppelte
+- Eingebaute Profile tragen den Zusatz **(PreBuild)** und sind schreibgeschützt: mit **Copy** machst du eine bearbeitbare Kopie. Ungültige Eingaben (doppelte
   Kanäle, überlappende Bereiche, Zahlen außerhalb von 0–255) werden live gemeldet und lassen sich nicht speichern.
 - Profile liegen in der Show und reisen mit ihr. Mit **Export** und **Import** teilst du sie als `.nxfixture`-Datei.
 - Ändert man ein Profil, folgen alle gepatchten Fixtures davon sofort. Passt es dann nicht mehr ins Universum, wird die
@@ -211,7 +220,7 @@ Im Bereich **Universes** legst du beliebig viele Universen an. Jedes hat seine e
 | **Name** | Zum Beispiel „Bühne“ oder „Dimmerrack“ |
 | **Output on** | Schaltet nur dieses Universum ab, die anderen laufen weiter |
 | **Broadcast** | Das Universum geht an das Standardziel aus dem Bereich Output |
-| **Unicast** | Das Universum geht direkt an einen Node (IPv4-Adresse) |
+| **Unicast** | Das Universum geht direkt an einen Node (IPv4-Adresse). Mit **Find nodes** fragt NX-DMX das Netz nach Art-Net-Nodes (ArtPoll) und du wählst den Empfänger aus der Liste. Jedes Universum kann einen anderen haben |
 
 Universen entstehen auch automatisch, wenn du eine Fixture hineinpatchst. Ein Universum mit gepatchten Fixtures lässt sich
 nicht löschen. Darunter zeigt die Live-Anzeige alle 512 Kanäle des ausgewählten Universums.
@@ -236,6 +245,49 @@ Standardmäßig hören alle Schnittstellen nur auf **diesem Computer**. Soll Com
 du **Allow other computers** ein. HTTP kann zusätzlich mit einem Token geschützt werden, und Anfragen von Webseiten im
 Browser lehnt NX-DMX ab. Eine Schritt-für-Schritt-Anleitung mit Beispielknöpfen steht in
 [docs/companion.md](docs/companion.md).
+
+## Fader-Leiste
+
+Der Knopf **FADERS** neben der Befehlszeile blendet unten links die Fader-Leiste ein, in der gleichen Größe wie das Tastenfeld.
+Die Befehlszeile wandert dann nach oben über Fader-Leiste, Programmer-Tabelle und Tastenfeld.
+
+- **Acht Fader pro Seite**, fünf Seiten (Pfeile oben in der Leiste). Über jedem Fader sitzt eine Taste, darunter steht der Name
+  auf einem Streifen in der Farbe des Faders.
+- **Belegung:** Tippe auf den Namen eines Faders (oder klicke mit der rechten Maustaste auf den Fader). Er kann eine **Cuelist** steuern
+  (ab 1 % startet sie, bei 0 wird sie ausgeschaltet, dazwischen skaliert der Fader ihre Intensität), eine **Gruppe** als Submaster
+  (skaliert die Intensität ihrer Fixtures) oder den **Master**. Name und Farbe wählst du im selben Fenster.
+- **Highlight:** Fährst du mit der Maus über einen Fader, markiert NX-DMX blau, was darauf liegt: die Fixtures der Gruppe oder
+  der Cuelist in der Fixture-Ansicht, die Kachel in Groups, die Karte in Cuelists. In der Kopfzeile steht der Name.
+- **Eigenes Fenster:** Mit dem Symbol oben rechts in der Leiste (⧉) öffnest du die Leiste in einem eigenen Fenster, etwa auf
+  einem zweiten oder Touch-Bildschirm. Das Symbol im Fenster (⮌) oder das Schließen holt sie zurück.
+- Fader sind Befehle: `Fader 3 At 60`, `Fader 3 Cuelist 2` und die anderen stehen in der [Befehlsliste](#befehle) und gehen auch
+  über Companion (`/api/fader/3/60`, OSC `/nxdmx/fader 3 60`).
+- Die Belegung wird mit der Show gespeichert, die Stellung der Fader nicht.
+
+## Eigene Farben
+
+Auf der Seite **COLOR** der Fixture-Ansicht öffnet **+ Colours…** die Farbbibliothek: Name und Hex-Wert eingeben oder mit
+drei Reglern mischen und hinzufügen. Eigene Farben tragen einen gelben Rand, funktionieren wie `Color <Name>` und liegen in der
+Show. Mit **Import** lädst du eine Liste (`.nxcolors` oder Text mit einer Farbe pro Zeile, `Name;#RRGGBB`), mit **Export** gibst
+du deine Farben weiter. Eine Farbe mit dem Namen einer eingebauten Farbe ersetzt diese. Die Schrift auf den Farbfeldern ist auf
+hellen Farben schwarz und auf dunklen weiß.
+
+## Einstellungen und Touch
+
+Ein Klick auf das **NX** oben links öffnet die Einstellungen (`Strg+0`):
+
+| Einstellung | Wirkung |
+|---|---|
+| **Start NX-DMX when Windows starts** | Startet das Programm beim Anmelden in Windows. Standardmäßig **aus** |
+| Look for a new version | Suche nach Updates beim Start |
+| Open the view that was open last time | Beim Start in der zuletzt benutzten Ansicht |
+| **Interface** 100 bis 200 % | Skaliert die ganze Oberfläche, größere Knöpfe für Touch-Bildschirme |
+| Show the keypad / the fader bar | Tastenfeld und Fader-Leiste ein- oder ausblenden |
+| Ask before deleting | Rückfrage vor dem Löschen von Fixtures, Universen und Profilen |
+
+Knöpfe, Eingabefelder, Listenzeilen und Rollbalken haben Fingergröße, Listen sind zum Verschieben mit dem Finger eingerichtet, und der
+Touch-Druck läuft ohne die Windows-Wartezeit für Rechtsklick und Wischgesten. Das ist an einem echten Touch-Bildschirm noch nicht getestet. Bei hohen Skalierungen blendet NX-DMX das Tastenfeld selbst aus, wenn der Platz
+fehlt (die Taste **KEYS** bringt es zurück, sobald das Fenster breit genug ist).
 
 ## Shows speichern und laden
 
@@ -287,7 +339,7 @@ soll oder erst beim nächsten Beenden.
 
 - Das Pult **startet niemals von allein neu**, weil gerade eine Show laufen könnte.
 - Ohne Internet passiert nichts, und es gibt keine Fehlermeldung.
-- Mit einem Klick auf die Versionsnummer (`v0.3.0`) links unten suchst du von Hand nach Updates.
+- Mit einem Klick auf die Versionsnummer (`v0.3.1`) links unten suchst du von Hand nach Updates.
 - Updates funktionieren in der **installierten** Version. Eine aus dem Quellcode gestartete Version meldet das im Log.
 - Deine Show bleibt beim Neustart erhalten, weil sie automatisch gesichert wird (siehe [Shows speichern](#shows-speichern-und-laden)).
   Der Programmer und die Cuelist-Positionen starten danach leer. Der Dialog weist darauf hin.

@@ -35,20 +35,22 @@ public sealed class GroupsView : ConsoleView
     {
         var snapshot = Host.Snapshot;
         var signature = string.Join('|', snapshot.Groups.Select(g => $"{g.Number}:{g.Label}:{g.Count}:{g.Fixtures}:{g.IsSelected}"))
-            + "#" + snapshot.Selection.Count;
+            + "#" + snapshot.Selection.Count + "#" + Host.Highlight?.Kind + Host.Highlight?.Target;
         if (signature == _signature)
             return;
 
         _signature = signature;
         _tiles.Children.Clear();
         foreach (var group in snapshot.Groups)
-            _tiles.Children.Add(Tile(group.Number.ToString(), group.Label, $"{group.Count} fixtures", group.Fixtures, group.IsSelected, $"Group {group.Number}"));
+            _tiles.Children.Add(Tile(group.Number.ToString(), group.Label, $"{group.Count} fixtures", group.Fixtures, group.IsSelected, $"Group {group.Number}", null, IsHighlighted(group.Number)));
 
         var next = Enumerable.Range(1, 9999).First(n => snapshot.Groups.All(g => g.Number != n));
         var add = Tile("+", "New group", snapshot.Selection.Count == 0 ? "select fixtures first" : $"from {snapshot.SelectionText}", "", false, $"Record Group {next}", () => NewGroup(next));
         add.Opacity = snapshot.Selection.Count == 0 ? 0.45 : 1;
         _tiles.Children.Add(add);
     }
+
+    private bool IsHighlighted(int group) => Host.Highlight is { Kind: Core.Playback.FaderKind.Group } fader && fader.Target == group;
 
     /// <summary>
     /// Stores the selection as a new group. A selection that is already a group is refused, so that clicking the tile
@@ -73,7 +75,7 @@ public sealed class GroupsView : ConsoleView
         Host.Click($"Record Group {number}");
     }
 
-    private Button Tile(string number, string label, string count, string fixtures, bool selected, string command, Action? click = null)
+    private Button Tile(string number, string label, string count, string fixtures, bool selected, string command, Action? click = null, bool highlighted = false)
     {
         var grid = new Grid { Margin = new Thickness(10, 8, 10, 8) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -102,9 +104,9 @@ public sealed class GroupsView : ConsoleView
             Height = 112,
             Margin = new Thickness(4),
             Style = Ui.Style("TileButton"),
-            Background = Ui.Brush(selected ? "AmberDimBrush" : "Surface2Brush"),
-            BorderBrush = Ui.Brush(selected ? "AmberBrush" : "LineBrush"),
-            BorderThickness = new Thickness(selected ? 2 : 1),
+            Background = Ui.Brush(highlighted ? "BlueDimBrush" : selected ? "AmberDimBrush" : "Surface2Brush"),
+            BorderBrush = Ui.Brush(highlighted ? "BlueBrush" : selected ? "AmberBrush" : "LineBrush"),
+            BorderThickness = new Thickness(selected || highlighted ? 2 : 1),
             Content = grid,
             ToolTip = command,
         };

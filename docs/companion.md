@@ -117,3 +117,16 @@ Fixture 1 Thru 8; Color Blue
 - **Rückmeldung:** Lies mit `/api/var/cuelist.1.active` oder `/api/var/blackout` den Zustand ab, um einen Knopf bei laufendem
   Cue leuchten zu lassen.
 - **Aktivität:** Im Bereich Remote und im Befehls-Log siehst du jeden empfangenen Befehl mit Quelle (HTTP, OSC, TCP, UDP).
+
+## Fader
+
+Fader lassen sich ebenfalls fernsteuern (die Belegung legst du in NX-DMX mit der Fader-Leiste oder per Befehl fest, zum Beispiel
+`/api/cmd/Fader 3 Group 1`):
+
+| Knopf | Pfad / OSC |
+|---|---|
+| Fader 3 auf 60 % | `/api/fader/3/60`, OSC `/nxdmx/fader 3 60` oder `/nxdmx/fader/3` mit dem Wert als Argument (0 bis 100) |
+| Taste über Fader 3 | `/api/fader/3` |
+
+Bei einer Cuelist startet ein Wert über 0 die Cuelist und 0 schaltet sie aus. Bei einer Gruppe skaliert der Fader die Intensität
+ihrer Fixtures, beim Master den Grand Master.

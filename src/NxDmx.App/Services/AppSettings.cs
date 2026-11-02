@@ -32,6 +32,27 @@ public sealed class AppSettings
     public string LastView { get; set; } = "Fixtures";
     public bool KeypadVisible { get; set; } = true;
 
+    /// <summary>Starts NX-DMX when Windows starts. Off until the operator turns it on.</summary>
+    public bool StartWithWindows { get; set; }
+
+    public bool CheckUpdatesOnStart { get; set; } = true;
+
+    /// <summary>Opens the view that was open when the program was closed. Off always starts in Fixtures.</summary>
+    public bool RememberView { get; set; } = true;
+
+    /// <summary>Asks before deleting fixtures, universes and profiles.</summary>
+    public bool ConfirmDeletes { get; set; } = true;
+
+    /// <summary>Size of the whole interface in percent. 100 is normal, larger sizes are easier to hit with a finger.</summary>
+    public int UiScalePercent { get; set; } = 100;
+
+    public bool FaderBarVisible { get; set; }
+
+    /// <summary>The fader bar is shown in a window of its own instead of in the main window.</summary>
+    public bool FadersPopped { get; set; }
+
+    public int FaderPage { get; set; } = 1;
+
     public RemoteOptions ToRemoteOptions() =>
         new(HttpEnabled, HttpPort, OscEnabled, OscPort, TextEnabled, TextPort, RemoteAllowNetwork, RemoteToken);
 

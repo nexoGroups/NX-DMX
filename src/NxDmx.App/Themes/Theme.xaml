@@ -61,7 +61,7 @@
         <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="12,5"/>
-        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="MinHeight" Value="34"/>
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
@@ -158,7 +158,7 @@
         <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="12,5"/>
-        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="MinHeight" Value="34"/>
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
@@ -215,7 +215,7 @@
         <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="14,5"/>
-        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="MinHeight" Value="34"/>
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
@@ -273,6 +273,38 @@
         </Setter>
     </Style>
 
+    <!-- The NX logo at the top of the navigation is the button for the settings page -->
+    <Style x:Key="LogoButton" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Height" Value="46"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Chrome" Background="Transparent" BorderThickness="0,0,0,2" BorderBrush="{StaticResource LineBrush}">
+                        <TextBlock x:Name="Mark" Text="NX" FontSize="22" FontFamily="Segoe UI Black" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource AmberBrush}"/>
+                            <Setter TargetName="Mark" Property="Foreground" Value="{StaticResource AmberBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Scrolling with a finger: drag up and down in any scroll area -->
+    <Style TargetType="ScrollViewer">
+        <Setter Property="PanningMode" Value="VerticalOnly"/>
+    </Style>
+
     <!-- Text input -->
 
     <Style TargetType="TextBox">
@@ -283,7 +315,7 @@
         <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="6,4"/>
-        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="MinHeight" Value="34"/>
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Template">
@@ -359,7 +391,7 @@
     <Style TargetType="ComboBox">
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="MinHeight" Value="34"/>
         <Setter Property="MaxDropDownHeight" Value="320"/>
         <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
         <Setter Property="Template">
@@ -394,7 +426,7 @@
 
     <Style TargetType="ComboBoxItem">
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="Padding" Value="10,9"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ComboBoxItem">
@@ -437,7 +469,7 @@
 
     <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Width" Value="10"/>
+        <Setter Property="Width" Value="16"/>
         <Setter Property="Height" Value="Auto"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -459,7 +491,7 @@
                         <Trigger Property="Orientation" Value="Horizontal">
                             <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/>
                             <Setter Property="Width" Value="Auto"/>
-                            <Setter Property="Height" Value="10"/>
+                            <Setter Property="Height" Value="16"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -500,7 +532,7 @@
         <Setter Property="SelectionMode" Value="Extended"/>
         <Setter Property="SelectionUnit" Value="FullRow"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="RowHeight" Value="26"/>
+        <Setter Property="RowHeight" Value="32"/>
         <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
         <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
         <Style.Resources>

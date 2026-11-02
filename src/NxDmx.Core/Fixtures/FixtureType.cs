@@ -57,6 +57,9 @@ public sealed class FixtureType
 
     public bool IsBuiltIn { get; }
 
+    /// <summary>The name as shown in lists: built-in profiles are marked, so they are told apart from the operator's own.</summary>
+    public string DisplayName => IsBuiltIn ? $"{Name} (PreBuild)" : Name;
+
     public IReadOnlyList<ChannelDefinition> Channels { get; }
 
     /// <summary>Number of consecutive DMX channels the fixture occupies, including channels the profile leaves unused.</summary>

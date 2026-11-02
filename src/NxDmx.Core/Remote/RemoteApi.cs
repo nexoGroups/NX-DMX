@@ -81,6 +81,8 @@ public sealed class RemoteApi(LightingConsole console)
                 };
             case "master" when HasNumber(0):
                 return $"Master At {Arg(0)}";
+            case "fader" when HasNumber(0):
+                return HasNumber(1) ? $"Fader {Whole(Arg(0))} At {Arg(1)}" : $"Fader {Whole(Arg(0))} Button";
             case "clear":
                 return "Clear";
             case "clearall":
@@ -133,6 +135,10 @@ public sealed class RemoteApi(LightingConsole console)
         {
             return null;
         }
+
+        // /nxdmx/fader/3 0.6 moves fader 3: here the number in the address and the value of the message belong together.
+        if (verb == "fader" && parts.Length > 2 && message.Text(0) is { } faderValue)
+            args.Add(faderValue);
 
         return FromShortcut(verb, args);
     }

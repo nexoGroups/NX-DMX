@@ -2,12 +2,13 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:c="clr-namespace:NxDmx.App.Controls"
-        Title="NX-DMX" Width="1520" Height="940" MinWidth="1200" MinHeight="740"
+        Title="NX-DMX" Width="1520" Height="940" MinWidth="1280" MinHeight="740"
+        Stylus.IsFlicksEnabled="False" Stylus.IsPressAndHoldEnabled="False" Stylus.IsTapFeedbackEnabled="False"
         Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}"
         FontFamily="Segoe UI" FontSize="12" UseLayoutRounding="True" SnapsToDevicePixels="True"
         Loaded="Window_Loaded" Closing="Window_Closing" SourceInitialized="Window_SourceInitialized"
         PreviewKeyDown="Window_PreviewKeyDown" PreviewMouseUp="Window_PreviewMouseUp" PreviewTextInput="Window_PreviewTextInput">
-    <Grid>
+    <Grid x:Name="Shell">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="78"/>
             <ColumnDefinition Width="*"/>
@@ -16,11 +17,10 @@
         <!-- Navigation -->
         <Border Background="#050505" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Top">
-                    <Border Height="46" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1">
-                        <TextBlock Text="NX" FontSize="22" FontWeight="Black" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   FontFamily="Segoe UI Black"/>
-                    </Border>
+                <ScrollViewer DockPanel.Dock="Top" VerticalScrollBarVisibility="Hidden" Focusable="False">
+                <StackPanel>
+                    <RadioButton x:Name="NavSettings" Uid="Settings" Style="{StaticResource LogoButton}" GroupName="Nav" Checked="Nav_Checked"
+                                 ToolTip="Settings (Ctrl+0)" AutomationProperties.AutomationId="NavSettings"/>
                     <RadioButton x:Name="NavFixtures" Uid="Fixtures" Style="{StaticResource NavButton}" Tag="▦" Content="FIXTURES" GroupName="Nav" Checked="Nav_Checked"
                                  ToolTip="Select fixtures and control their parameters (Ctrl+1)" AutomationProperties.AutomationId="NavFixtures"/>
                     <RadioButton x:Name="NavGroups" Uid="Groups" Style="{StaticResource NavButton}" Tag="◫" Content="GROUPS" GroupName="Nav" Checked="Nav_Checked"
@@ -42,6 +42,7 @@
                     <RadioButton x:Name="NavShow" Uid="Show" Style="{StaticResource NavButton}" Tag="▤" Content="SHOW" GroupName="Nav" Checked="Nav_Checked"
                                  ToolTip="New, open and save shows (Ctrl+9)" AutomationProperties.AutomationId="NavShow"/>
                 </StackPanel>
+                </ScrollViewer>
 
                 <StackPanel DockPanel.Dock="Bottom" VerticalAlignment="Bottom" Margin="6,0,6,8">
                     <Button x:Name="UpdateButton" Style="{StaticResource GreenButton}" Visibility="Collapsed" FontSize="10" Padding="2,4"
@@ -77,6 +78,9 @@
                                    ToolTip="Unsaved changes" Visibility="Collapsed"/>
                     </StackPanel>
 
+                    <TextBlock x:Name="HighlightText" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="13"
+                               Foreground="{StaticResource BlueBrush}" TextTrimming="CharacterEllipsis" Margin="12,0"
+                               AutomationProperties.AutomationId="FaderHighlight"/>
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
                         <TextBlock Text="MASTER" Style="{StaticResource Caption}" Margin="0,0,8,0"/>
                         <c:LevelBar x:Name="MasterBar" Width="150" Height="28" Caption="" Fill="{StaticResource AmberBrush}"
@@ -96,20 +100,24 @@
                           ToolTip="Drag to resize, double-click to reset" MouseDoubleClick="Splitter_DoubleClick"/>
 
             <!-- Bottom: programmer table / log, command line, keypad -->
-            <Grid Grid.Row="3">
+            <!-- Without the fader bar the command line sits under the programmer table. With it, the command line moves up and
+                 spans fader bar, programmer table and keypad. -->
+            <Grid Grid.Row="3" x:Name="BottomGrid">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition x:Name="KeypadColumn" Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*" MinWidth="120"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    <c:InfoPanel x:Name="Info"/>
-                    <c:CommandLineBar x:Name="CommandBar" Grid.Row="1"/>
-                </Grid>
-                <c:Keypad x:Name="Pad" Grid.Column="1" Width="560" Height="204" VerticalAlignment="Top"/>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Border x:Name="FaderHost" Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" Width="560" Height="204" VerticalAlignment="Top"
+                        Visibility="Collapsed"/>
+                <c:InfoPanel x:Name="Info" Grid.Row="1" Grid.Column="1"/>
+                <c:CommandLineBar x:Name="CommandBar" Grid.Row="2" Grid.Column="1"/>
+                <c:Keypad x:Name="Pad" Grid.Row="1" Grid.RowSpan="2" Grid.Column="2" Width="560" Height="204" VerticalAlignment="Top"/>
             </Grid>
         </Grid>
     </Grid>
