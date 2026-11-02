@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using Microsoft.Win32;
+using NxDmx.App.Views;
 using NxDmx.Core.Storage;
 
 namespace NxDmx.App.Services;
@@ -16,24 +17,50 @@ public static class ShowDialogs
             host.NewShow();
     }
 
+    /// <summary>A new show with a small rig already patched and programmed.</summary>
+    public static void NewPrebuilt(ConsoleHost host, Window owner)
+    {
+        if (ConfirmDiscard(host, owner))
+            host.NewPrebuiltShow();
+    }
+
     public static void Open(ConsoleHost host, Window owner)
     {
         if (!ConfirmDiscard(host, owner))
             return;
 
         var dialog = new OpenFileDialog { Filter = ShowFilter, InitialDirectory = EnsureShowsFolder(), Title = "Open show" };
-        if (dialog.ShowDialog(owner) != true)
-            return;
+        if (dialog.ShowDialog(owner) == true)
+            OpenFile(host, owner, dialog.FileName);
+    }
 
+    /// <summary>Opens a show file under a progress window that can be cancelled. The caller has asked about unsaved changes already.</summary>
+    public static bool OpenFile(ConsoleHost host, Window owner, string path)
+    {
         try
         {
-            host.OpenShow(dialog.FileName);
+            // The views are refreshed once, inside the progress window, when the show is read: not once per change on the way.
+            using (host.PauseRefresh())
+            {
+                Busy.Run(owner, $"Opening {Path.GetFileName(path)}", job => host.LoadShowFile(path, job), cancellable: true,
+                    onScreen: saved => host.CompleteOpen(path, saved));
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            host.AddLog($"Opening {Path.GetFileName(path)} was cancelled. The show is as it was.");
         }
         catch (Exception ex) when (ex is ShowFileException or IOException or UnauthorizedAccessException)
         {
-            host.AddLog($"Could not open {Path.GetFileName(dialog.FileName)}: {ex.Message}", error: true);
+            host.AddLog($"Could not open {Path.GetFileName(path)}: {ex.Message}", error: true);
             MessageBox.Show(owner, ex.Message, "Open show", MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (ex is IOException or UnauthorizedAccessException)
+                host.ForgetRecent(path);
         }
+
+        return false;
     }
 
     /// <summary>Saves under the current name, or asks for one. Returns false when the operator cancelled or it failed.</summary>
@@ -58,7 +85,7 @@ public static class ShowDialogs
     {
         try
         {
-            host.SaveShow(path);
+            Busy.Run(owner, $"Saving {Path.GetFileName(path)}", job => host.SaveShowFile(path, job), onScreen: saved => host.CompleteSave(path, saved));
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

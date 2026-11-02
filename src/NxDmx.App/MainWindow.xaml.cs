@@ -179,6 +179,10 @@ public partial class MainWindow : Window
         var start = _host.Settings.RememberView && Views.Any(v => v.Key == _host.Settings.LastView) ? _host.Settings.LastView : "Fixtures";
         Select(start);
         CommandBar.FocusLine();
+        if (_host.Settings.ShowStartWindow)
+            StartupFlow.Show(_host, this);
+
+        CommandBar.FocusLine();
         if (_host.Settings.CheckUpdatesOnStart)
             await CheckForUpdatesAsync(manual: false);
     }

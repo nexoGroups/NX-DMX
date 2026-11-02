@@ -63,8 +63,15 @@ public sealed class UniversesView : ConsoleView
         BuildEditor();
 
         var lower = new DockPanel();
-        DockPanel.SetDock(_monitorTitle, Dock.Top);
-        lower.Children.Add(_monitorTitle);
+        var export = Ui.Button("Export for Companion", ExportForCompanion, tooltip: "The values of this universe as text for the Bitfocus Companion action \"Generic Art-Net: Set Complex Value\"");
+        export.Margin = new Thickness(0, 4, 8, 0);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(export, "ExportCompanion");
+        DockPanel.SetDock(export, Dock.Right);
+        var monitorHeader = new DockPanel();
+        DockPanel.SetDock(monitorHeader, Dock.Top);
+        monitorHeader.Children.Add(export);
+        monitorHeader.Children.Add(_monitorTitle);
+        lower.Children.Add(monitorHeader);
         lower.Children.Add(new ScrollViewer { Content = _monitor, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Focusable = false, Margin = new Thickness(8, 0, 8, 8) });
         var lowerBorder = new Border { Style = Ui.Style("PanelBorder"), BorderThickness = new Thickness(0, 1, 0, 0), Child = lower };
 
@@ -187,6 +194,21 @@ public sealed class UniversesView : ConsoleView
         Host.Engine.LastFrame?.Universes.TryGetValue(_selected, out data);
         _monitorTitle.Text = $"DMX OUTPUT · UNIVERSE {_selected} · {info.Label.ToUpperInvariant()}{(info.Enabled ? "" : "  (OUTPUT OFF – not sent)")}";
         _monitor.Show(data, info.Blocks);
+    }
+
+    /// <summary>Opens the Companion export of the universe shown in the monitor, with its values at this moment.</summary>
+    private void ExportForCompanion()
+    {
+        var info = Host.Snapshot.Universes.FirstOrDefault(u => u.Number == _selected);
+        if (info is null)
+        {
+            Host.AddLog("Export for Companion: select a universe first.", error: true);
+            return;
+        }
+
+        byte[]? data = null;
+        Host.Engine.LastFrame?.Universes.TryGetValue(_selected, out data);
+        new CompanionExportWindow(_selected, data ?? new byte[512], info.Blocks) { Owner = Window.GetWindow(this) }.ShowDialog();
     }
 
     private void OnSelected()

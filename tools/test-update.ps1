@@ -53,7 +53,7 @@ try {
     # and get the target typed in below.
     $dataDir = Join-Path ([IO.Path]::GetTempPath()) ('nxdmx-update-data-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
     New-Item -ItemType Directory -Force $dataDir | Out-Null
-    '{ "BroadcastAddress": "127.0.0.1", "HttpEnabled": false, "OscEnabled": false, "TextEnabled": false }' | Set-Content -Encoding UTF8 (Join-Path $dataDir 'settings.json')
+    '{ "BroadcastAddress": "127.0.0.1", "HttpEnabled": false, "OscEnabled": false, "TextEnabled": false, "ShowStartWindow": false }' | Set-Content -Encoding UTF8 (Join-Path $dataDir 'settings.json')
     $env:NXDMX_DATA = $dataDir
 
     if ($Feed) { $env:NXDMX_UPDATE_SOURCE = $Feed } else { Remove-Item Env:NXDMX_UPDATE_SOURCE -ErrorAction SilentlyContinue }

@@ -92,6 +92,9 @@ public sealed class ConsoleHost : IDisposable
     /// <summary>A message about the start (restored or failed autosave) for the log.</summary>
     public string? StartupNote { get; }
 
+    /// <summary>The show on screen at the start is the one of the last session, brought back from the automatic backup.</summary>
+    public bool RestoredSession { get; private set; }
+
     public string? ShowPath { get; private set; }
 
     public bool IsDirty { get; private set; }
@@ -114,8 +117,41 @@ public sealed class ConsoleHost : IDisposable
 
     // ---- console changes -------------------------------------------------------------------------------------
 
+    private int _refreshPaused;
+    private int _missedChange;
+
+    /// <summary>
+    /// Holds back the refresh of the views while a long job (opening a show) changes the console on another thread, so the
+    /// interface stays free for the progress window. The caller refreshes when it is done; disposing catches up on what was missed.
+    /// </summary>
+    public IDisposable PauseRefresh()
+    {
+        Interlocked.Increment(ref _refreshPaused);
+        return new RefreshPause(this);
+    }
+
+    private sealed class RefreshPause(ConsoleHost host) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 1)
+                return;
+
+            if (Interlocked.Decrement(ref host._refreshPaused) == 0 && Interlocked.Exchange(ref host._missedChange, 0) == 1)
+                host._dispatcher.BeginInvoke(host.RefreshNow);
+        }
+    }
+
     private void OnConsoleChanged()
     {
+        if (Volatile.Read(ref _refreshPaused) > 0)
+        {
+            Volatile.Write(ref _missedChange, 1);
+            return;
+        }
+
         // Commands can come from the remote servers' threads; the views must be refreshed on the UI thread, once.
         if (Interlocked.Exchange(ref _changePending, 1) == 0)
         {
@@ -244,8 +280,21 @@ public sealed class ConsoleHost : IDisposable
     /// <summary>Runs commands (separated by <c>;</c>) and writes them and their answers to the log.</summary>
     public CommandResult Run(string line)
     {
+        var parts = CommandText.Split(line);
+
+        // A series of commands is tried on a copy first: either all of it works or none of it is applied.
+        if (Console.Preflight(parts) is { Success: false } refused)
+        {
+            AddLog("> " + string.Join("; ", parts), echo: true);
+            AddLog(refused.Message, error: true);
+            RefreshNow();
+            Feedback = (refused.Message, true);
+            FeedbackChanged?.Invoke();
+            return refused;
+        }
+
         var last = CommandResult.Ok();
-        foreach (var part in CommandText.Split(line))
+        foreach (var part in parts)
         {
             AddLog("> " + part, echo: true);
             last = Console.Execute(part);
@@ -409,6 +458,7 @@ public sealed class ConsoleHost : IDisposable
                 ShowPath = ShowStorage.ReadSessionPath();
                 _autosavedJson = Console.ExportShow();
                 _savedJson = BaselineOf(ShowPath);
+                RestoredSession = true;
                 return "Restored your show from the last session.";
             }
             catch (ShowFileException ex)
@@ -417,16 +467,9 @@ public sealed class ConsoleHost : IDisposable
             }
         }
 
-        Console.Execute("Universe 1 Label \"Stage\"");
-        Console.Execute("Patch Fixture 1 Thru 8 Type RGBDim At 1.1");
-        Console.Execute("Patch Fixture 9 Thru 12 Type \"Spot Mover\" At 1.33");
-        Console.Execute("Patch Fixture 21 Thru 24 Type Dimmer At 1.150");
-        Console.Execute("Fixture 1 Thru 8");
-        Console.Execute("Record Group 1 \"Wash\"");
-        Console.Execute("Fixture 9 Thru 12");
-        Console.Execute("Record Group 2 \"Movers\"");
-        Console.Execute("ClearAll");
-        Console.ClearHistory();
+        if (DemoShow.Build(Console) is { } failure)
+            note = $"The pre-built show could not be built ({failure})";
+
         _savedJson = Console.ExportShow();
         return note;
     }
@@ -464,26 +507,83 @@ public sealed class ConsoleHost : IDisposable
         ShellChanged?.Invoke();
     }
 
-    /// <summary>Throws <see cref="ShowFileException"/> or an <see cref="IOException"/> and leaves the show alone when it cannot be opened.</summary>
-    public void OpenShow(string path)
+    /// <summary>A new show with a small rig already patched and programmed, to have something to drive at once.</summary>
+    public void NewPrebuiltShow()
     {
-        Console.ImportShow(ShowStorage.Read(path));
-        ShowPath = path;
+        var failure = DemoShow.Build(Console);
+        ShowPath = null;
         _savedJson = Console.ExportShow();
+        AddLog(failure is null
+            ? "New pre-built show: 8 RGB washes, 4 movers, 4 dimmers, 3 groups and a cuelist of 3 cues."
+            : $"The pre-built show could not be built completely: {failure}", error: failure is not null);
+        RefreshNow();
+        ShellChanged?.Invoke();
+    }
+
+    // Opening and saving are done in two parts. The first part is the slow one (reading and writing the file, building
+    // the show) and may run on another thread under a progress window; the second part brings the interface up to date
+    // and runs on the interface thread.
+
+    /// <summary>
+    /// Reads the show file and replaces the show with it. Safe to run off the interface thread. Throws
+    /// <see cref="ShowFileException"/>, an <see cref="IOException"/> or <see cref="OperationCanceledException"/> and leaves the show
+    /// alone when it cannot be opened. Returns the text the show is compared with to see unsaved changes.
+    /// </summary>
+    public string LoadShowFile(string path, BusyJob job)
+    {
+        var text = ShowStorage.Read(path, job.Step(0, 0.1, "Reading the file…"));
+        Console.ImportShow(text, job.Step(0.1, 0.7, "Reading the show…"));
+        job.PointOfNoReturn();
+        return Console.ExportShow(job.Step(0.7, 1, "Preparing the show…"));
+    }
+
+    public void CompleteOpen(string path, string savedText)
+    {
+        ShowPath = path;
+        _savedJson = savedText;
+        AddRecent(path);
         AddLog($"Opened {Path.GetFileName(path)}.");
         RefreshNow();
         ShellChanged?.Invoke();
     }
 
-    public void SaveShow(string path)
+    /// <summary>Writes the show to the file. Safe to run off the interface thread. Returns the text that was written.</summary>
+    public string SaveShowFile(string path, BusyJob job)
     {
-        var json = Console.ExportShow();
-        ShowStorage.Write(path, json);
+        var text = Console.ExportShow(job.Step(0, 0.85, "Collecting the show…"));
+        ShowStorage.Write(path, text, job.Step(0.85, 1, "Writing the file…"));
+        return text;
+    }
+
+    public void CompleteSave(string path, string savedText)
+    {
         ShowPath = path;
-        _savedJson = json;
+        _savedJson = savedText;
+        AddRecent(path);
         AddLog($"Saved {Path.GetFileName(path)}.");
         UpdateShowState();
         ShellChanged?.Invoke();
+    }
+
+    private const int MaxRecentShows = 8;
+
+    /// <summary>The show files opened or saved last that still exist, newest first.</summary>
+    public IReadOnlyList<string> RecentShows => Settings.RecentShows.Where(File.Exists).ToList();
+
+    public void AddRecent(string path)
+    {
+        Settings.RecentShows.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        Settings.RecentShows.Insert(0, path);
+        if (Settings.RecentShows.Count > MaxRecentShows)
+            Settings.RecentShows.RemoveRange(MaxRecentShows, Settings.RecentShows.Count - MaxRecentShows);
+
+        Settings.Save();
+    }
+
+    public void ForgetRecent(string path)
+    {
+        Settings.RecentShows.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        Settings.Save();
     }
 
     /// <summary>Updates the unsaved marker and keeps the autosave current.</summary>

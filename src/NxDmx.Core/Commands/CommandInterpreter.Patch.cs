@@ -236,7 +236,7 @@ public sealed partial class CommandInterpreter
 
         var used = show.Patch.Fixtures.Count(f => f.Universe == number);
         if (used > 0)
-            throw new CommandException($"Universe {number} still has {used} patched fixture{(used == 1 ? "" : "s")}. Move or delete them first");
+            throw new CommandRefusedException($"Universe {number} still has {used} patched fixture{(used == 1 ? "" : "s")}. Move or delete them first");
 
         show.Universes.Remove(number);
     }

@@ -17,7 +17,7 @@
     <Product>NX-DMX</Product>
     <Authors>NX-DMX contributors</Authors>
     <!-- Release builds get the real version from the git tag (-p:Version=...); this is the development default. -->
-    <Version>0.3.1</Version>
+    <Version>0.4.0</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 

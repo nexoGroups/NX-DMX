@@ -30,6 +30,13 @@ public sealed class RemoteApi(LightingConsole console)
         if (lines.Count == 0)
             return (false, "No command given");
 
+        // A series is tried on a copy first, so a remote button never leaves half of its commands applied.
+        if (console.Preflight(lines) is { Success: false } refused)
+        {
+            Activity?.Invoke(new RemoteActivity(DateTime.Now, source, text, false, refused.Message));
+            return (false, refused.Message);
+        }
+
         var messages = new List<string>();
         foreach (var line in lines)
         {

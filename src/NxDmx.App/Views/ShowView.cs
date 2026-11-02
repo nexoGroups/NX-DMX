@@ -24,10 +24,12 @@ public sealed class ShowView : ConsoleView
         panel.Children.Add(_counts);
 
         var buttons = new WrapPanel { Margin = new Thickness(0, 16, 0, 0) };
-        buttons.Children.Add(Wide("New", () => ShowDialogs.New(Host, Window.GetWindow(this)!), "Ctrl+N · an empty show"));
+        buttons.Children.Add(Wide("New empty", () => ShowDialogs.New(Host, Window.GetWindow(this)!), "Ctrl+N · an empty show"));
+        buttons.Children.Add(Wide("New pre-built", () => ShowDialogs.NewPrebuilt(Host, Window.GetWindow(this)!), "A small rig to try things at once"));
         buttons.Children.Add(Wide("Open…", () => ShowDialogs.Open(Host, Window.GetWindow(this)!), "Ctrl+O"));
         buttons.Children.Add(Wide("Save", () => ShowDialogs.Save(Host, Window.GetWindow(this)!), "Ctrl+S", "GreenButton"));
         buttons.Children.Add(Wide("Save as…", () => ShowDialogs.SaveAs(Host, Window.GetWindow(this)!), "Ctrl+Shift+S"));
+        buttons.Children.Add(Wide("Start window…", () => StartupFlow.Show(Host, Window.GetWindow(this)!), "The window with the choices from the start of NX-DMX"));
         panel.Children.Add(buttons);
 
         panel.Children.Add(new Border { Height = 1, Background = Ui.Brush("LineBrush"), Margin = new Thickness(0, 22, 0, 16) });

@@ -54,8 +54,15 @@ public sealed class LightingConsole
     /// </summary>
     public IReadOnlyList<(string Line, CommandResult Result)> ExecuteMany(string lines)
     {
+        var parts = CommandText.Split(lines);
         var results = new List<(string, CommandResult)>();
-        foreach (var line in CommandText.Split(lines))
+        if (Preflight(parts) is { Success: false } refused)
+        {
+            results.Add((lines, refused));
+            return results;
+        }
+
+        foreach (var line in parts)
         {
             var result = Execute(line);
             results.Add((line, result));
@@ -64,6 +71,49 @@ public sealed class LightingConsole
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Tries a series of commands on a copy of the console before any of them runs for real, so that a series which
+    /// would fail half-way changes nothing at all. Commands that act on what is playing (Go, a fader move) cannot be
+    /// tried on a copy and are left out. The answer names the command that does not work.
+    /// </summary>
+    public CommandResult Preflight(IReadOnlyList<string> lines)
+    {
+        if (lines.Count(line => !CommandInterpreter.IsLive(line)) < 2)
+            return CommandResult.Ok();
+
+        string json;
+        List<int> selection;
+        List<(Programming.ValueKey Key, double Value)> values;
+        lock (_gate)
+        {
+            json = ShowFile.Serialize(Show);
+            selection = [.. Programmer.Selection];
+            values = Programmer.Values.Select(v => (v.Key, v.Value)).ToList();
+        }
+
+        var copy = new LightingConsole();
+        copy.ImportShow(json);
+        copy.Programmer.Select(selection);
+        foreach (var (key, value) in values)
+            copy.Programmer.Set(key.FixtureId, key.Attribute, value);
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (CommandInterpreter.IsLive(lines[i]))
+                continue;
+
+            var result = copy.Execute(lines[i]);
+            if (!result.Success)
+            {
+                var text = result.Refused ? result.Message[CommandResult.RefusedPrefix.Length..] : result.Message;
+                var message = $"Step {i + 1} of {lines.Count} (\"{lines[i]}\"): {text}. Nothing was changed";
+                return result.Refused ? CommandResult.Refuse(message) : CommandResult.Error(message);
+            }
+        }
+
+        return CommandResult.Ok();
     }
 
     /// <summary>Stores a fixture profile in the show (see <see cref="CommandInterpreter.SaveProfile"/>).</summary>
@@ -105,19 +155,20 @@ public sealed class LightingConsole
     }
 
     /// <summary>The show (patch, groups, cuelists, universes, profiles) as the text of a show file.</summary>
-    public string ExportShow()
+    public string ExportShow(IProgress<double>? progress = null)
     {
         lock (_gate)
-            return ShowFile.Serialize(Show);
+            return ShowFile.Serialize(Show, progress);
     }
 
     /// <summary>
     /// Replaces the whole show with the one in the text. The programmer is emptied, all cuelists are off and Oops
     /// forgets its history. Throws <see cref="ShowFileException"/> and changes nothing when the text is not valid.
     /// </summary>
-    public void ImportShow(string json)
+    public void ImportShow(string json, IProgress<double>? progress = null)
     {
-        var loaded = ShowFile.Deserialize(json);
+        // The slow part, reading the file into a new show, runs before the lock: the output keeps going meanwhile.
+        var loaded = ShowFile.Deserialize(json, progress);
 
         lock (_gate)
         {

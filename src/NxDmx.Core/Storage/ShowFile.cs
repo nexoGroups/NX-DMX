@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.IO;
+using System.Text;
 using System.Text.Json;
 using NxDmx.Core.ArtNet;
 using NxDmx.Core.Dmx;
@@ -21,6 +24,9 @@ public static class ShowFile
 
     private const string FormatName = "nx-dmx-show";
     private const int CurrentVersion = 2;
+
+    /// <summary>Share of the progress of reading a show that goes to parsing the text; the rest is building the show.</summary>
+    private const double ParseShare = 0.6;
 
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
@@ -96,71 +102,119 @@ public static class ShowFile
 
     // ---- writing ---------------------------------------------------------------------------------------------
 
-    public static string Serialize(Show show)
+    /// <summary>
+    /// The show as text. <paramref name="progress"/> reports 0 to 1 as items are written; every universe, fixture, group and
+    /// colour counts one, a cue counts one plus the values it holds, so the figure follows the work that is really left.
+    /// </summary>
+    public static string Serialize(Show show, IProgress<double>? progress = null)
     {
-        var data = new FileData
-        {
-            // Every universe a fixture is patched in is part of the show, even when nobody configured it yet.
-            Universes = show.Universes.Values
-                .Concat(show.Patch.Fixtures.Select(f => f.Universe).Distinct()
-                    .Where(number => !show.Universes.ContainsKey(number))
-                    .Select(number => new UniverseConfig(number)))
-                .OrderBy(u => u.Number)
-                .Select(u => new UniverseData
-                {
-                    Number = u.Number,
-                    Label = u.Label,
-                    Enabled = u.Enabled,
-                    Destination = u.Destination.ToString(),
-                    UnicastAddress = u.UnicastAddress,
-                })
-                .ToList(),
-            Profiles = show.CustomTypes.Values
-                .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(ProfileFile.ToData)
-                .ToList(),
-            Fixtures = show.Patch.Fixtures
-                .Select(f => new FixtureData { Id = f.Id, Label = f.Label, Type = f.Type.Name, Universe = f.Universe, Address = f.Address })
-                .ToList(),
-            Groups = show.Groups.Values
-                .Select(g => new GroupData { Number = g.Number, Label = g.Label, Fixtures = [.. g.FixtureIds] })
-                .ToList(),
-            Faders = show.Faders.Values
-                .Select(x => new FaderData { Number = x.Number, Kind = x.Kind.ToString(), Target = x.Target, Label = x.Label, Color = x.Color })
-                .ToList(),
-            Colors = ColorFile.ToData(show.CustomColors.Values.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)),
-            Cuelists = show.Cuelists.Values
-                .Select(l => new CuelistData
-                {
-                    Number = l.Number,
-                    Label = l.Label,
-                    Cues = l.Cues
-                        .Select(c => new CueData
-                        {
-                            Number = c.Number,
-                            Label = c.Label,
-                            Values = c.Values
-                                .OrderBy(v => v.Key.FixtureId).ThenBy(v => v.Key.Attribute)
-                                .Select(v => new ValueData { Fixture = v.Key.FixtureId, Attribute = v.Key.Attribute.ToString(), Value = v.Value })
-                                .ToList(),
-                        })
-                        .ToList(),
-                })
-                .ToList(),
-        };
+        // Every universe a fixture is patched in is part of the show, even when nobody configured it yet.
+        var universes = show.Universes.Values
+            .Concat(show.Patch.Fixtures.Select(f => f.Universe).Distinct()
+                .Where(number => !show.Universes.ContainsKey(number))
+                .Select(number => new UniverseConfig(number)))
+            .OrderBy(u => u.Number)
+            .ToList();
+        var profiles = show.CustomTypes.Values.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var fixtures = show.Patch.Fixtures.ToList();
+        var groups = show.Groups.Values.ToList();
+        var cuelists = show.Cuelists.Values.ToList();
+        var faders = show.Faders.Values.ToList();
+        var colors = ColorFile.ToData(show.CustomColors.Values.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase));
 
-        return JsonSerializer.Serialize(data, Options);
+        var total = universes.Count + profiles.Count + fixtures.Count + groups.Count + faders.Count + colors.Count
+            + cuelists.Sum(l => 1 + l.Cues.Sum(c => 1 + c.Values.Count));
+        var meter = new ProgressMeter(progress, total);
+
+        // The order of the properties is the one of FileData.
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true }))
+        {
+            writer.WriteStartObject();
+            writer.WriteString(nameof(FileData.Format), FormatName);
+            writer.WriteNumber(nameof(FileData.Version), CurrentVersion);
+
+            WriteList(writer, nameof(FileData.Universes), universes.Select(u => new UniverseData
+            {
+                Number = u.Number,
+                Label = u.Label,
+                Enabled = u.Enabled,
+                Destination = u.Destination.ToString(),
+                UnicastAddress = u.UnicastAddress,
+            }), meter);
+            WriteList(writer, nameof(FileData.Profiles), profiles.Select(ProfileFile.ToData), meter);
+            WriteList(writer, nameof(FileData.Fixtures), fixtures.Select(f => new FixtureData
+            {
+                Id = f.Id, Label = f.Label, Type = f.Type.Name, Universe = f.Universe, Address = f.Address,
+            }), meter);
+            WriteList(writer, nameof(FileData.Groups), groups.Select(g => new GroupData { Number = g.Number, Label = g.Label, Fixtures = [.. g.FixtureIds] }), meter);
+
+            writer.WritePropertyName(nameof(FileData.Cuelists));
+            writer.WriteStartArray();
+            foreach (var list in cuelists)
+            {
+                writer.WriteStartObject();
+                writer.WriteNumber(nameof(CuelistData.Number), list.Number);
+                writer.WriteString(nameof(CuelistData.Label), list.Label);
+                writer.WritePropertyName(nameof(CuelistData.Cues));
+                writer.WriteStartArray();
+                foreach (var cue in list.Cues)
+                {
+                    JsonSerializer.Serialize(writer, new CueData
+                    {
+                        Number = cue.Number,
+                        Label = cue.Label,
+                        Values = cue.Values
+                            .OrderBy(v => v.Key.FixtureId).ThenBy(v => v.Key.Attribute)
+                            .Select(v => new ValueData { Fixture = v.Key.FixtureId, Attribute = v.Key.Attribute.ToString(), Value = v.Value })
+                            .ToList(),
+                    }, Options);
+                    meter.Add(1 + cue.Values.Count);
+                }
+
+                writer.WriteEndArray();
+                writer.WriteEndObject();
+                meter.Add(1);
+            }
+
+            writer.WriteEndArray();
+
+            WriteList(writer, nameof(FileData.Faders), faders.Select(x => new FaderData
+            {
+                Number = x.Number, Kind = x.Kind.ToString(), Target = x.Target, Label = x.Label, Color = x.Color,
+            }), meter);
+            WriteList(writer, nameof(FileData.Colors), colors, meter);
+            writer.WriteEndObject();
+        }
+
+        progress?.Report(1);
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    private static void WriteList<T>(Utf8JsonWriter writer, string name, IEnumerable<T> items, ProgressMeter meter)
+    {
+        writer.WritePropertyName(name);
+        writer.WriteStartArray();
+        foreach (var item in items)
+        {
+            JsonSerializer.Serialize(writer, item, Options);
+            meter.Add(1);
+        }
+
+        writer.WriteEndArray();
     }
 
     // ---- reading ---------------------------------------------------------------------------------------------
 
     /// <summary>Builds a new show from the text. Nothing is applied anywhere unless the whole file is valid.</summary>
-    public static Show Deserialize(string json)
+    public static Show Deserialize(string json, IProgress<double>? progress = null)
     {
+        // Reading the text takes the first part of the progress (it is counted in the bytes read), building the show the rest.
         FileData? data;
         try
         {
-            data = JsonSerializer.Deserialize<FileData>(json, Options);
+            using var stream = new ProgressStream(new MemoryStream(Encoding.UTF8.GetBytes(json)), progress is null ? null : new ScaledProgress(progress, 0, ParseShare));
+            data = JsonSerializer.Deserialize<FileData>(stream, Options);
         }
         catch (JsonException ex)
         {
@@ -175,9 +229,13 @@ public static class ShowFile
             throw new ShowFileException($"Unsupported show file version {data.Version}.");
 
         var show = new Show();
+        var meter = new ProgressMeter(progress is null ? null : new ScaledProgress(progress, ParseShare, 1),
+            data.Profiles.Count + data.Universes.Count + data.Fixtures.Count + data.Groups.Count + (data.Faders?.Count ?? 0) + (data.Colors?.Count ?? 0)
+            + data.Cuelists.Sum(l => 1 + l.Cues.Sum(c => 1 + c.Values.Count)));
 
         foreach (var p in data.Profiles)
         {
+            meter.Add(1);
             var profile = ProfileFile.FromData(p);
             if (FixtureTypeLibrary.Find(profile.Name) is not null || !show.CustomTypes.TryAdd(profile.Name, profile))
                 throw new ShowFileException($"The profile \"{profile.Name}\" appears twice or has the name of a built-in profile.");
@@ -185,6 +243,7 @@ public static class ShowFile
 
         foreach (var u in data.Universes)
         {
+            meter.Add(1);
             if (u.Number < 1 || u.Number > ArtNetPacket.MaxUniverse || show.Universes.ContainsKey(u.Number))
                 throw new ShowFileException($"Universe number {u.Number} is invalid or appears twice.");
             if (!Enum.TryParse<UniverseDestination>(u.Destination, out var destination) || !Enum.IsDefined(destination))
@@ -203,6 +262,7 @@ public static class ShowFile
 
         foreach (var f in data.Fixtures)
         {
+            meter.Add(1);
             var type = show.FindType(f.Type)
                 ?? throw new ShowFileException($"Fixture {f.Id} has the unknown type '{f.Type}'.");
             if (f.Id < 1)
@@ -219,6 +279,7 @@ public static class ShowFile
 
         foreach (var g in data.Groups)
         {
+            meter.Add(1);
             if (g.Number < 1 || show.Groups.ContainsKey(g.Number))
                 throw new ShowFileException($"Group number {g.Number} is invalid or appears twice.");
 
@@ -227,12 +288,14 @@ public static class ShowFile
 
         foreach (var l in data.Cuelists)
         {
+            meter.Add(1);
             if (l.Number < 1 || show.Cuelists.ContainsKey(l.Number))
                 throw new ShowFileException($"Cuelist number {l.Number} is invalid or appears twice.");
 
             var cuelist = new Cuelist(l.Number) { Label = l.Label };
             foreach (var c in l.Cues)
             {
+                meter.Add(1 + c.Values.Count);
                 if (c.Number < 0 || cuelist.Find(c.Number) is not null)
                     throw new ShowFileException($"Cue {c.Number} in Cuelist {l.Number} is invalid or appears twice.");
 
@@ -255,6 +318,7 @@ public static class ShowFile
 
         foreach (var x in data.Faders ?? [])
         {
+            meter.Add(1);
             if (x.Number is < 1 or > FaderConfig.MaxFaders || show.Faders.ContainsKey(x.Number))
                 throw new ShowFileException($"Fader number {x.Number} is invalid or appears twice.");
             if (!Enum.TryParse<FaderKind>(x.Kind, out var kind) || !Enum.IsDefined(kind))
@@ -268,6 +332,7 @@ public static class ShowFile
 
         foreach (var c in data.Colors ?? [])
         {
+            meter.Add(1);
             var color = ColorPreset.FromHex(c.Name ?? "", c.Hex ?? "");
             if (color is null || color.Name.Length is 0 or > 40 || color.Name.Contains('"'))
                 throw new ShowFileException($"The colour \"{c.Name}\" ('{c.Hex}') is not valid.");
@@ -275,6 +340,7 @@ public static class ShowFile
             show.CustomColors[color.Name] = color;
         }
 
+        progress?.Report(1);
         return show;
     }
 }

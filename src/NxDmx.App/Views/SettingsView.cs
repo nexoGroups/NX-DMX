@@ -11,6 +11,7 @@ public sealed class SettingsView : ConsoleView
 {
     private readonly CheckBox _startup = new() { Content = "Start NX-DMX when Windows starts" };
     private readonly CheckBox _updates = new() { Content = "Look for a new version when NX-DMX starts" };
+    private readonly CheckBox _startWindow = new() { Content = "Show the start window when NX-DMX starts" };
     private readonly CheckBox _remember = new() { Content = "Open the view that was open last time" };
     private readonly CheckBox _confirm = new() { Content = "Ask before deleting fixtures, universes and profiles" };
     private readonly CheckBox _keypad = new() { Content = "Show the keypad" };
@@ -25,9 +26,11 @@ public sealed class SettingsView : ConsoleView
 
         panel.Children.Add(Ui.Caption("Start"));
         panel.Children.Add(Row(_startup, "Off by default. NX-DMX then opens by itself when you sign in to Windows. It never starts any output you did not set up."));
+        panel.Children.Add(Row(_startWindow, "Continue where you left off, a new pre-built or empty show, open a show or a recent one. Off goes straight to the show of the last session."));
         panel.Children.Add(Row(_updates, "A new version only shows a green button; NX-DMX never restarts by itself."));
         panel.Children.Add(Row(_remember, "Off always starts in the Fixtures view."));
         OnToggled(_startup, ToggleStartup);
+        OnToggled(_startWindow, () => Change(s => s.ShowStartWindow = _startWindow.IsChecked == true));
         OnToggled(_updates, () => Change(s => s.CheckUpdatesOnStart = _updates.IsChecked == true));
         OnToggled(_remember, () => Change(s => s.RememberView = _remember.IsChecked == true));
         System.Windows.Automation.AutomationProperties.SetAutomationId(_startup, "SettingStartup");
@@ -124,6 +127,7 @@ public sealed class SettingsView : ConsoleView
         _loading = true;
         var s = Host.Settings;
         _startup.IsChecked = WindowsStartup.IsEnabled();
+        _startWindow.IsChecked = s.ShowStartWindow;
         _updates.IsChecked = s.CheckUpdatesOnStart;
         _remember.IsChecked = s.RememberView;
         _confirm.IsChecked = s.ConfirmDeletes;

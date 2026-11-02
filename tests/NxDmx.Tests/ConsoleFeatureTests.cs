@@ -502,7 +502,9 @@ public class ProfileTests
     {
         var console = new LightingConsole();
         console.SaveProfile(null, Profile("Par", Ch(FixtureAttribute.Dimmer, 1)));
-        console.Execute("Patch Fixture 1 Thru 3 Type Par At 1.1");
+        console.Execute("Patch Fixture 1 Type Par At 1.1");
+        console.Execute("Patch Fixture 2 Type Par At 1.11");
+        console.Execute("Patch Fixture 3 Type Par At 1.21");
 
         var result = console.SaveProfile("Par", Profile("Par 2", Ch(FixtureAttribute.Dimmer, 1), Ch(FixtureAttribute.Red, 2)));
 
@@ -650,16 +652,17 @@ public class CommandTextTests
     }
 
     [Fact]
-    public void Many_commands_stop_at_the_first_failure()
+    public void Many_commands_that_would_fail_run_none_of_them()
     {
         var console = new LightingConsole();
         console.Execute("Patch Fixture 1 Type RGB At 1.1");
 
         var results = console.ExecuteMany("Fixture 1; Color Chartreuse; Color Red");
 
-        Assert.Equal(2, results.Count);
-        Assert.True(results[0].Result.Success);
-        Assert.False(results[1].Result.Success);
+        var only = Assert.Single(results);
+        Assert.False(only.Result.Success);
+        Assert.Contains("Step 2 of 3", only.Result.Message);
+        Assert.Empty(console.Read((_, programmer) => programmer.Selection));
     }
 }
 

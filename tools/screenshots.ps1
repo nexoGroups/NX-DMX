@@ -63,7 +63,7 @@ function Command($root, $line) {
 
 $data = Join-Path ([IO.Path]::GetTempPath()) ('nxdmx-shots-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force $data | Out-Null
-'{ "BroadcastAddress": "127.0.0.1", "HttpPort": 18765, "OscPort": 18000, "TextPort": 17000, "FaderBarVisible": true }' | Set-Content -Encoding UTF8 (Join-Path $data 'settings.json')
+'{ "BroadcastAddress": "127.0.0.1", "HttpPort": 18765, "OscPort": 18000, "TextPort": 17000, "FaderBarVisible": true, "ShowStartWindow": false }' | Set-Content -Encoding UTF8 (Join-Path $data 'settings.json')
 $env:NXDMX_DATA = $data
 
 # Something has to listen on the Art-Net port, otherwise Windows reports the loopback sends as failed.

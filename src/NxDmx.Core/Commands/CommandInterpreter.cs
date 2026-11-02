@@ -79,13 +79,20 @@ public sealed partial class CommandInterpreter(Show show, Programmer programmer,
                 return Run(tokens);
 
             before = ShowSnapshot.Capture(show, programmer);
+            var baseline = ShowValidator.Check(show, programmer);
             var result = Run(tokens);
+            Seal(baseline);
 
             _undo.Add((before, string.Join(' ', line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))));
             if (_undo.Count > MaxUndoSteps)
                 _undo.RemoveAt(0);
 
             return result;
+        }
+        catch (CommandRefusedException ex)
+        {
+            before?.Restore(show, programmer);
+            return CommandResult.Refuse(ex.Message);
         }
         catch (CommandException ex)
         {
@@ -311,6 +318,7 @@ public sealed partial class CommandInterpreter(Show show, Programmer programmer,
             t.ExpectEnd();
 
             var ids = FixturesInRange(from, to);
+            var orphaned = CountCueValuesOf(ids);
             foreach (var id in ids)
             {
                 show.Patch.Remove(id);
@@ -319,7 +327,7 @@ public sealed partial class CommandInterpreter(Show show, Programmer programmer,
                     group.FixtureIds.Remove(id);
             }
 
-            return CommandResult.Ok($"Deleted Fixture {SelectionFormatter.Format(ids)}");
+            return CommandResult.Ok($"Deleted Fixture {SelectionFormatter.Format(ids)}" + (orphaned == 0 ? "" : OrphanNote(orphaned)));
         }
 
         var target = ParseTarget(t);
@@ -329,15 +337,22 @@ public sealed partial class CommandInterpreter(Show show, Programmer programmer,
         {
             case "cue":
                 FindCue(target);
+                RequireCueNotPlaying(target);
                 show.Cuelists[target.Cuelist].Remove(target.Number);
                 break;
             case "group":
-                if (!show.Groups.Remove((int)target.Number))
+                if (!show.Groups.ContainsKey((int)target.Number))
                     throw new CommandException($"Group {target.Number} does not exist");
+                RequireNotOnFader(FaderKind.Group, (int)target.Number, Describe(target));
+                show.Groups.Remove((int)target.Number);
                 break;
             case "cuelist":
-                if (!show.Cuelists.Remove((int)target.Number))
+                if (!show.Cuelists.TryGetValue((int)target.Number, out var doomed))
                     throw new CommandException($"Cuelist {target.Number} does not exist");
+                if (doomed.IsActive)
+                    throw new CommandRefusedException($"Cuelist {doomed.Number} is running. Release it first (Off)");
+                RequireNotOnFader(FaderKind.Cuelist, doomed.Number, Describe(target));
+                show.Cuelists.Remove(doomed.Number);
                 break;
             case "universe":
                 DeleteUniverse((int)target.Number);

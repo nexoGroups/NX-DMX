@@ -32,7 +32,7 @@ bedeutet (Auswahl, Programmer, Wiedergabe, Fehler). Alles, was du anklickst, lan
 Log, und alles, was du tippen kannst, kannst du auch von einem Stream-Deck-Knopf aus senden.
 
 > **Stand: frühe Version (0.x).** Die Grundlagen funktionieren und sind getestet, aber es fehlt noch einiges, unter
-> anderem Fades und Executor-Fader (siehe [Roadmap](#roadmap)). Die Art-Net-Ausgabe
+> anderem Fades und Presets (siehe [Roadmap](#roadmap)). Die Art-Net-Ausgabe
 > wurde bisher gegen einen Test-Empfänger geprüft, noch nicht an echter Hardware. Setze sie vorerst nicht für eine
 > Live-Show ein, bei der etwas schiefgehen darf.
 
@@ -60,6 +60,10 @@ Log, und alles, was du tippen kannst, kannst du auch von einem Stream-Deck-Knopf
 - **Fernsteuerung** per HTTP, OSC und Textport für Bitfocus Companion und Stream Deck
 - **Art-Net 4** (ArtDmx, UDP Port 6454) mit 40 Hz, bis zu 32768 Universen
 - **Shows speichern und laden** (`.nxshow`), dazu eine automatische Sicherung nach jeder Änderung
+- **Startfenster:** Weiter mit der letzten Show, neue vorgebaute oder leere Show, Show öffnen oder eine der zuletzt geöffneten
+- **Prüfung vor jeder Operation:** Verbotenes wird mit Grund abgelehnt (*Not allowed: …*), Befehlsfolgen laufen ganz oder gar nicht
+- **Fortschrittsbalken** beim Öffnen und Speichern großer Shows, der echte Arbeit zeigt und nichts schätzt
+- **Export für Bitfocus Companion:** Die DMX-Werte eines Universums als Text für die Aktion „Generic Art-Net: Set Complex Value“
 - **Automatische Updates:** Eine neue Version erscheint als grüner Button links unten (siehe [Updates](#updates))
 
 ## Installation
@@ -148,7 +152,7 @@ Mit `Help` (oder dem Reiter HELP unten) listet die Software alle Befehle auf.
 | `Record Cue 1 "Name"` | Programmer als Cue speichern, optional mit `Cuelist 2` |
 | `Record Group 3 "Name"` | Auswahl als Gruppe speichern |
 | `Update Cue 1` | Den Programmer in einen bestehenden Cue einfügen |
-| `Delete Cue 1`, `Delete Group 3`, `Delete Cuelist 2` | Löschen |
+| `Delete Cue 1`, `Delete Group 3`, `Delete Cuelist 2` | Löschen. Abgelehnt, solange die Cuelist läuft, der Cue gerade spielt oder die Gruppe oder Cuelist auf einem Fader liegt |
 | `Delete Fixture 1 Thru 5`, `Delete Universe 3` | Aus dem Patch entfernen (ein Universum nur, wenn es leer ist) |
 | `Label Group 3 "Front"` | Umbenennen (auch `Cue`, `Cuelist`, `Fixture` und `Universe`) |
 | `Go`, `Go -`, `Back`, `Goto Cue 5`, `Off`, `Toggle` | Playback, mit `Cuelist 2` hinten für eine andere Cuelist |
@@ -170,7 +174,7 @@ Mit `Help` (oder dem Reiter HELP unten) listet die Software alle Befehle auf.
 | `Help` | Zeigt die Befehlsübersicht |
 
 Mehrere Befehle lassen sich mit `;` hintereinander setzen, zum Beispiel `Group 2; Color Blue; At 80`. Sie laufen der
-Reihe nach und halten beim ersten Fehler an.
+Reihe nach, werden aber vorher zusammen auf einer Kopie der Show geprüft: Würde einer fehlschlagen, läuft keiner.
 
 **Profile:** `Dimmer` (1 Kanal), `RGB` (3), `RGBW` (4), `RGBDim` (4, mit Dimmer-Kanal), `Mover` (8, Pan/Tilt in 16 Bit,
 Dimmer, RGB) und `Spot Mover` (15: Pan/Tilt 16 Bit, Dimmer, Strobe, Farbrad, Gobo, Prisma, Fokus, Zoom und mehr mit
@@ -224,6 +228,11 @@ Im Bereich **Universes** legst du beliebig viele Universen an. Jedes hat seine e
 
 Universen entstehen auch automatisch, wenn du eine Fixture hineinpatchst. Ein Universum mit gepatchten Fixtures lässt sich
 nicht löschen. Darunter zeigt die Live-Anzeige alle 512 Kanäle des ausgewählten Universums.
+
+**Export für Companion:** Der Knopf **Export for Companion** über der Live-Anzeige öffnet ein Fenster mit den aktuellen Werten
+des Universums im Format `Kanal,Wert;Kanal,Wert;` (zum Beispiel `17,255;18,128;`). Den Text fügst du in die Companion-Aktion
+„Generic Art-Net: Set Complex Value“ ein. Zur Wahl stehen alle gepatchten Kanäle (mit Nullen, setzt den ganzen Look), nur die
+Kanäle über 0 oder alle 512. Das Universum stellst du in Companion passend zum Port-Address deines Nodes ein.
 
 <div align="center">
 <img src="docs/images/universes.png" alt="Universen mit Ziel-Einstellung und DMX-Monitor" width="900">
@@ -297,10 +306,24 @@ Der Bereich **Show** und die Kopfzeile zeigen den Namen, und ein oranges **●**
 
 | Taste | Tastenkürzel | Wirkung |
 |---|---|---|
-| **New** | `Strg+N` | Leere Show anlegen |
+| **New empty** | `Strg+N` | Leere Show anlegen |
+| **New pre-built** | | Kleine Show zum Ausprobieren: 8 RGB-Washes, 4 Mover, 4 Dimmer, 3 Gruppen, eine Cuelist mit 3 Cues |
 | **Open** | `Strg+O` | Eine `.nxshow`-Datei öffnen |
 | **Save** | `Strg+S` | Speichern, beim ersten Mal mit Namensabfrage |
 | **Save as** | `Strg+Umschalt+S` | Unter neuem Namen speichern |
+| **Start window** | | Das Startfenster noch einmal öffnen |
+
+- **Startfenster:** Beim Start fragt NX-DMX, was passieren soll: *Continue where you left off* (die Show der letzten
+  Sitzung), *New pre-built show*, *New empty show*, *Open show…* oder eine der zuletzt geöffneten Shows. Schließen lässt
+  alles, wie es ist. Das Fenster lässt sich unter **Settings** abschalten.
+- **Prüfung vor jeder Operation:** Jeder Befehl wird geprüft, bevor er etwas ändert. Verbotenes wird mit *Not allowed: …*
+  und dem Grund abgelehnt, zum Beispiel das Löschen einer laufenden Cuelist, einer Gruppe oder Cuelist auf einem Fader,
+  eines Universums mit Fixtures oder eines Profils in Benutzung. Eine Operation, die den Patch zerstören würde
+  (Fixtures auf denselben Kanälen), wird zurückgenommen. Mehrere Befehle mit `;` werden zuerst zusammen auf einer Kopie
+  geprüft: Entweder läuft alles oder nichts. Das gilt auch für Companion, OSC und die anderen Fernsteuerungen.
+- **Fortschrittsbalken:** Das Öffnen und Speichern großer Shows zeigt einen Balken. Er zeigt gelesene und geschriebene
+  Daten, keine Schätzung, und erscheint nur, wenn die Arbeit länger als etwa 0,4 Sekunden dauert. Das Öffnen lässt sich
+  abbrechen, solange die Show noch nicht ersetzt wurde.
 
 - Die Dateien liegen standardmäßig in `Dokumente\NX-DMX Shows` und sind lesbares JSON. Sie lassen sich kopieren, sichern
   und auf einen anderen Rechner mitnehmen. Dateien im alten Format (aus 0.2) lassen sich weiter öffnen.
@@ -339,7 +362,7 @@ soll oder erst beim nächsten Beenden.
 
 - Das Pult **startet niemals von allein neu**, weil gerade eine Show laufen könnte.
 - Ohne Internet passiert nichts, und es gibt keine Fehlermeldung.
-- Mit einem Klick auf die Versionsnummer (`v0.3.1`) links unten suchst du von Hand nach Updates.
+- Mit einem Klick auf die Versionsnummer (`v0.4.0`) links unten suchst du von Hand nach Updates.
 - Updates funktionieren in der **installierten** Version. Eine aus dem Quellcode gestartete Version meldet das im Log.
 - Deine Show bleibt beim Neustart erhalten, weil sie automatisch gesichert wird (siehe [Shows speichern](#shows-speichern-und-laden)).
   Der Programmer und die Cuelist-Positionen starten danach leer. Der Dialog weist darauf hin.
@@ -385,13 +408,13 @@ denselben `CommandInterpreter`.
 Für Maintainer: Version im Tag festlegen und pushen. Den Rest erledigt [GitHub Actions](.github/workflows/release.yml).
 
 ```powershell
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 Der Workflow führt die Tests aus, baut die selbstständige Windows-Version, erzeugt mit Velopack den Installer, das
 Update-Paket und den Update-Feed und veröffentlicht alles als GitHub-Release. Danach sehen installierte Programme das
-Update. Lokal erzeugt `tools/pack.ps1 -Version 0.3.0` dieselben Dateien im Ordner `Releases/`. Dazu brauchst du das
+Update. Lokal erzeugt `tools/pack.ps1 -Version 0.4.0` dieselben Dateien im Ordner `Releases/`. Dazu brauchst du das
 Velopack-Werkzeug in der passenden Version: `dotnet tool install -g vpk --version 1.2.161`.
 
 Zum Testen eines Updates vor der Veröffentlichung kannst du die Umgebungsvariable `NXDMX_UPDATE_SOURCE` auf einen
@@ -403,8 +426,9 @@ Ordner (oder eine URL) mit den Release-Dateien setzen, dann sucht die installier
 - [x] Shows speichern und laden, automatische Sicherung
 - [x] Patch-Fenster, Fixture-Manager, mehrere Universen
 - [x] Fernsteuerung für Companion, Stream Deck und OSC
+- [x] Startfenster, Prüfung jeder Operation, Fortschrittsbalken
 - [ ] Presets (Color, Position, Beam) als eigene Objekte
-- [ ] Executor-Fader und Seiten
+- [x] Fader-Leiste mit Seiten für Cuelists, Gruppen und Master
 - [ ] Copy und Move, Highlight und Locate
 - [ ] GDTF-Import
 - [ ] Effekte

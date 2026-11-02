@@ -15,12 +15,19 @@ public sealed partial class CommandInterpreter
         var before = ShowSnapshot.Capture(show, programmer);
         try
         {
+            var baseline = ShowValidator.Check(show, programmer);
             var message = edit();
+            Seal(baseline);
             _undo.Add((before, description));
             if (_undo.Count > MaxUndoSteps)
                 _undo.RemoveAt(0);
 
             return CommandResult.Ok(message);
+        }
+        catch (CommandRefusedException ex)
+        {
+            before.Restore(show, programmer);
+            return CommandResult.Refuse(ex.Message);
         }
         catch (CommandException ex)
         {
@@ -87,7 +94,7 @@ public sealed partial class CommandInterpreter
 
             var users = show.Patch.Fixtures.Count(f => ReferenceEquals(f.Type, type));
             if (users > 0)
-                throw new CommandException($"\"{name}\" is used by {users} patched fixture{(users == 1 ? "" : "s")}. Delete or re-patch them first");
+                throw new CommandRefusedException($"\"{name}\" is used by {users} patched fixture{(users == 1 ? "" : "s")}. Delete or re-patch them first");
 
             show.CustomTypes.Remove(type.Name);
             return $"Deleted profile \"{name}\"";

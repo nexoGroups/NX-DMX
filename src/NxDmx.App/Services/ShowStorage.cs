@@ -42,18 +42,60 @@ internal static class ShowStorage
     }
 
     /// <summary>Writes to a temporary file first, so a failure half-way never leaves a broken show behind.</summary>
-    public static void Write(string path, string text)
+    public static void Write(string path, string text, IProgress<double>? progress = null)
     {
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
         var temp = path + ".tmp";
-        File.WriteAllText(temp, text, new UTF8Encoding(false));
+        if (progress is null)
+        {
+            File.WriteAllText(temp, text, new UTF8Encoding(false));
+        }
+        else
+        {
+            // In pieces, so the progress is the part of the file that is really on disk.
+            var bytes = new UTF8Encoding(false).GetBytes(text);
+            using var file = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None);
+            for (var written = 0; written < bytes.Length;)
+            {
+                var count = Math.Min(ChunkSize, bytes.Length - written);
+                file.Write(bytes, written, count);
+                written += count;
+                progress.Report((double)written / bytes.Length);
+            }
+        }
+
         File.Move(temp, path, overwrite: true);
+        progress?.Report(1);
     }
 
-    public static string Read(string path) => File.ReadAllText(path, Encoding.UTF8);
+    private const int ChunkSize = 1 << 20;
+
+    /// <param name="progress">Reports the part of the file read so far.</param>
+    public static string Read(string path, IProgress<double>? progress = null)
+    {
+        if (progress is null)
+            return File.ReadAllText(path, Encoding.UTF8);
+
+        using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var bytes = new byte[file.Length];
+        var read = 0;
+        while (read < bytes.Length)
+        {
+            var count = file.Read(bytes, read, Math.Min(ChunkSize, bytes.Length - read));
+            if (count == 0)
+                break;
+
+            read += count;
+            progress.Report((double)read / bytes.Length);
+        }
+
+        progress.Report(1);
+        using var reader = new StreamReader(new MemoryStream(bytes, 0, read), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
+    }
 
     private static string? ReadOrNull(string path)
     {

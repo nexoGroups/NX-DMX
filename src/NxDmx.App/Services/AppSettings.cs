@@ -37,6 +37,12 @@ public sealed class AppSettings
 
     public bool CheckUpdatesOnStart { get; set; } = true;
 
+    /// <summary>Opens the start window (continue, new show, open show) when NX-DMX starts.</summary>
+    public bool ShowStartWindow { get; set; } = true;
+
+    /// <summary>Show files opened or saved last, newest first.</summary>
+    public List<string> RecentShows { get; set; } = [];
+
     /// <summary>Opens the view that was open when the program was closed. Off always starts in Fixtures.</summary>
     public bool RememberView { get; set; } = true;
 
